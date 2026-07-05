@@ -1,0 +1,62 @@
+# $schema: https://www.schemastore.org/github-action.json
+
+name: Download Asset from GitHub Release
+inputs:
+  repository:
+    description: Repository to download assets from
+    required: true
+  file:
+    description: Regular expression of file name to download
+    required: true
+  path:
+    description: Path to download assets to
+    required: true
+    default: '.'
+  pre-release:
+    description: Whether to accept pre-release assets
+    required: false
+    default: 'false'
+outputs:
+  file:
+    description: The path to the downloaded asset
+    value: ${{ steps.run.outputs.result }}
+
+runs:
+  using: composite
+  steps:
+    - id: run
+      uses: actions/github-script@v9
+      with:
+        result-encoding: string
+        script: |
+          const [owner, repo] = "${{ inputs.repository }}".split("/", 2);
+          const prerelease = Boolean("${{ inputs.pre-release }}");
+          const fileExp = new RegExp(`^${{ inputs.file }}$`);
+
+          const response = await github.rest.repos.listReleases({ owner, repo });
+          core.info(`Found ${response.data.length} releases`);
+          if (core.isDebug()) {
+            core.startGroup("Release Data");
+            core.debug(JSON.stringify(response.data, null, 2));
+            core.endGroup();
+          }
+
+          const release = response.data.find(release => !release.prerelease || prerelease);
+          const asset = release.assets.find(asset => fileExp.test(asset.name));
+          if (!asset) throw new Error("Cound not find asset: ${{ inputs.file }}");
+
+          core.info(`Using latest release: ${release.name ?? release.tag_name} (${release.tag_name}): ${release.url}`);
+          const fileResponse = await fetch(asset.browser_download_url);
+          const destPath = `${{ inputs.path }}/${asset.name}`;
+
+          core.info(`Writing file ${asset.name} to ${destPath}`);
+          const { createWriteStream } = await import("node:fs");
+          const { mkdir } = await import("node:fs/promises");
+          const { dirname } = await import("node:path");
+          const { Readable } = await import("node:stream");
+          const { pipeline } = await import("node:stream/promises");
+          await mkdir(dirname(destPath), { recursive: true });
+          await pipeline(Readable.fromWeb(fileResponse.body), createWriteStream(destPath));
+
+          core.info(`Download complete!`);
+          return destPath;

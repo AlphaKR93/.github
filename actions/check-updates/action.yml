@@ -1,0 +1,36 @@
+# $schema: https://www.schemastore.org/github-action.json
+
+name: Check for patch/apk updates
+runs:
+  using: node24
+  main: dist/index.js
+
+inputs:
+  token:
+    description: The GitHub token.
+    default: ${{ github.token }}
+    required: true
+  release-file:
+    description: File released to this repository. Used as a marker.
+    required: true
+  repository:
+    description: Patches repository to check for updates
+    required: true
+  target-file:
+    description: Target file to check for updates
+    required: true
+  pre-release:
+    description: Whether to also accept pre-release versions
+    required: false
+    default: "false"
+  tag-name:
+    description: Tag to check for updates
+    required: false
+
+outputs:
+  current:
+    description: Current release date
+  latest:
+    description: Latest release date
+  result:
+    description: Whether the target was updated

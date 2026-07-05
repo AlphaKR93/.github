@@ -1,0 +1,8 @@
+{
+  "name": "@types/flaresolverr",
+  "private": true,
+  "version": "1.0.0",
+  "description": "",
+  "main": "",
+  "types": "src/index.d.ts"
+}

@@ -1,0 +1,59 @@
+# $schema: https://www.schemastore.org/github-action.json
+
+name: Download APK from APKMirror
+runs:
+  using: node24
+  main: dist/index.js
+
+inputs:
+  base-url:
+    description: URL of APKMirror
+    required: true
+    default: 'https://www.apkmirror.com'
+  publisher-id:
+    description: Publisher ID
+    required: true
+  app-category:
+    description: Application ID
+    required: true
+  template:
+    description: Version page template
+    required: false
+  apk-name:
+    description: APK name
+    required: true
+  version:
+    description: Version to download
+    required: false
+  version-excepts:
+    description: Regular expressions to exclude when extracting versions from APKMirror
+    required: false
+    default: 'alpha|beta'
+  version-regex:
+    description: Regular expression to extract versions from APKMirror
+    required: true
+    default: '(?:0\.\d+|[1-9]\d*)(?:\.0[1-9]?|\.[1-9]\d*)*(?: (?:alpha|beta))?$'
+    # For Twitter/Soundcloud: '(?:0\.\d+|[1-9]\d*)(?:\.0[1-9]?|\.[1-9]\d*)*(?:-\w+)?(?:\.0[1-9]?|\.[1-9]\d*)?(?: (?:alpha|beta))?(?: \(Early Access\))?$'
+  bundle:
+    description: Whether the APK is bundled
+    required: false
+    default: 'false'
+  arch:
+    description: Architecture
+    required: false
+  dpi:
+    description: DPI
+    required: false
+  min-sdk:
+    description: Minimum SDK
+    required: false
+  unsafe-dangerouslyUseLatestVersionFromApkMirror:
+    description: Whether to use the latest version from APKMirror
+    required: false
+    default: 'false'
+
+outputs:
+  file:
+    description: Downloaded APK path
+  bundle:
+    description: Whether the APK is bundled (regardless of the input.bundle)

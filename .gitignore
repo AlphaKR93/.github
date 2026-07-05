@@ -1,0 +1,12 @@
+### JetBrains IDEs
+.idea/
+
+
+### Node.js
+node_modules/
+
+# TypeScript
+tsconfig.tsbuildinfo
+
+# Rollup
+.rollup.cache/

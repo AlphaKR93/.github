@@ -1,0 +1,22 @@
+# schema: https://www.schemastore.org/github-workflow.json
+
+name: Re-run workflow
+on:
+  workflow_dispatch:
+    inputs:
+      run_id:
+        type: string
+        description: "Run ID to retry"
+jobs:
+  invoke-rerun:
+    name: Invoke Re-run
+    runs-on: ubuntu-slim
+    steps:
+      - uses: actions/github-script@v9
+        with:
+          script: |
+            await octokit.rest.actions.reRunWorkflow({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              run_id: ${{ inputs.run_id }},
+            });

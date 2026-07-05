@@ -1,0 +1,51 @@
+# $schema: https://www.schemastore.org/github-action.json
+
+name: Re-run workflow if network is unstable
+inputs:
+  max_retries:
+    description: 'Maximum number of retries'
+    required: true
+    default: '3'
+  workflow_id:
+    description: '[DO NOT CHANGE] File name of the workflow to invoke re-run function'
+    required: true
+    default: '.rerun.yaml'
+
+runs:
+  using: composite
+  steps:
+    - id: network
+      name: Check network connection
+      shell: bash
+      run: |
+        # Check github connection stable or not:
+        function check_connection() {
+          CONTENT=$(curl -sL "$(curl -s 'https://api.github.com/repos/AlphaKR93/.github/releases/tags/ci' | jq -r '.assets[] | select(.name == "content") | .browser_download_url')")
+          if [[ "$CONTENT" == "OK" ]]; then
+          echo -e "\e[32mGithub connection OK\e[0m"
+          return 0
+          else
+          echo -e "\e[31mGithub connection not stable!\e[0m"
+          return 1
+          fi
+        }
+
+        check_connection; connection_stable=$?
+        echo "connection_stable=$connection_stable" >> "$GITHUB_OUTPUT"
+        exit "$connection_stable"
+
+    - if: failure() && steps.network.conclusion == 'failure'
+      name: Retry if network is unstable
+      uses: actions/github-script@v9
+      with:
+        script: |
+          if (context.runAttempt > Number("${{ inputs.max_retries }}" ?? "3"))
+            throw new Error("Max retries reached");
+
+          await github.rest.actions.createWorkflowDispatch({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            workflow_id: ${{ inputs.workflow_id }},
+            ref: context.ref,
+            inputs: { run_id: context.runId },
+          });

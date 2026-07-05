@@ -1,0 +1,185 @@
+# schema: https://www.schemastore.org/github-workflow.json
+
+name: Patch
+env:
+  JDK_FLAVOUR: zulu
+  JDK_VERSION: 25
+
+on:
+  workflow_call:
+    inputs:
+      name:
+        type: string
+        required: true
+        description: 'Name of the output file'
+      package-id:
+        type: string
+        required: true
+        description: 'Package ID of the app'
+
+      patcher-repo:
+        type: string
+        required: true
+        description: 'Repository to download patcher from'
+      patcher-file:
+        type: string
+        required: false
+        description: 'Regular expression to filter patcher file name'
+        default: '.*\.jar'
+      patcher-beta:
+        type: boolean
+        required: false
+        description: 'Whether to use beta version of patcher'
+        default: false
+      patches-repo:
+        type: string
+        required: true
+        description: 'Repository to download patches from'
+      patches-file:
+        type: string
+        required: false
+        description: 'Regular expression to filter patches file name'
+        default: '.*\.(?:mpp|rvp|jar)'
+      patches-beta:
+        type: boolean
+        required: false
+        description: 'Whether to use beta version of patches'
+        default: false
+      unsafe-useLatestVersionFromSources:
+        type: boolean
+        required: false
+        description: 'Whether to use latest version from sources'
+        default: false
+
+      apkmirror:
+        type: string
+        required: false
+        description: '<publisher-id>/<app-category>/<template>'
+
+    secrets:
+      OP_SERVICE_ACCOUNT_TOKEN:
+        required: true
+      OP_ENTRY_DEFAULT_OPTIONS:
+        required: true
+      OP_ENTRY_TARGET_SPECIFIC:
+        required: true
+
+permissions:
+  contents: write
+jobs:
+  patch-apkmirror:
+    if: inputs.apkmirror != ''
+    name: Patch (APKMirror)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/network
+
+      - # noinspection YAMLSchemaValidation
+        parallel:
+          - name: Set up JDK
+            uses: actions/setup-java@v5.4.0
+            with:
+              distribution: ${{ env.JDK_FLAVOUR }}
+              java-version: ${{ env.JDK_VERSION }}
+
+          - name: Start FlareSolverr
+            shell: bash
+            run: |
+              docker run -d --name flaresolverr -p 8191:8191 ghcr.io/flaresolverr/flaresolverr:latest
+              echo "[*] Waiting for FlareSolverr to start..."
+              for i in $(seq 1 30); do
+                if curl -s http://localhost:8191/ > /dev/null 2>&1; then
+                  echo "[+] FlareSolverr is ready."
+                  break
+                fi
+                sleep 2
+              done
+
+          - id: patcher
+            name: Download patcher
+            uses: ./.github/actions/gh-download-asset
+            with:
+              repository: ${{ inputs.patcher-repo }}
+              file: ${{ inputs.patcher-file }}
+              pre-release: ${{ inputs.patcher-beta }}
+
+          - id: patches
+            name: Download patches
+            uses: ./.github/actions/gh-download-asset
+            with:
+              repository: ${{ inputs.patches-repo }}
+              file: ${{ inputs.patches-file }}
+              pre-release: ${{ inputs.patches-beta }}
+
+      - id: version
+        name: Get supported latest version
+        run: |
+          echo "publisher-id=$(echo '${{ inputs.apkmirror }}' | cut -d '/' -f 1)" >> $GITHUB_OUTPUT
+          echo "app-category=$(echo '${{ inputs.apkmirror }}' | cut -d '/' -f 2)" >> $GITHUB_OUTPUT
+          echo "template=$(echo '${{ inputs.apkmirror }}' | cut -d '/' -f 3)" >> $GITHUB_OUTPUT
+
+          VERSIONS=$(java -jar ${{ steps.patcher.outputs.file }} list-versions --prerelease \
+            --patches=${{ steps.patches.outputs.file }} \
+            --filter-package-names=${{ inputs.package-id }} | head -n -1 | tail -n +5)
+          echo -e "$VERSIONS"
+          echo -e "\n"
+
+          VERSION=$(echo -e "$VERSIONS" | cut -f 2 | cut -d ' ' -f 1 | sort | tail -1)
+          echo "Using supported latest version: $VERSION"
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+      - id: source
+        name: Download YouTube APK from APKMirror
+        uses: ./actions/download-apkmirror
+        with:
+          publisher-id: ${{ steps.version.outputs.publisher-id }}
+          app-category: ${{ steps.version.outputs.app-category }}
+          template: ${{ steps.version.outputs.template }}
+          apk-name: ${{ steps.version.outputs.app-category }} # TODO: Deprecate & remove this
+          version-excepts: ''
+          unsafe-dangerouslyUseLatestVersionFromApkMirror: ${{ inputs.unsafe-useLatestVersionFromSources }}
+          version: ${{ steps.version.outputs.version }}
+
+      - name: Retrieve secrets from 1Password
+        id: keystore
+        uses: 1password/load-secrets-action@v4
+        with:
+          export-env: false
+        env:
+          OP_SERVICE_ACCOUNT_TOKEN: ${{ secrets.OP_SERVICE_ACCOUNT_TOKEN }}
+          PATCHER_GENERIC_ARGUMENT: ${{ secrets.OP_ENTRY_DEFAULT_OPTIONS }}
+          PATCHER_SPECIFIC_OPTIONS: ${{ secrets.OP_ENTRY_TARGET_SPECIFIC }}/patches/${{ inputs.name }}
+          KEYSTORE: ${{ secrets.OP_ENTRY_TARGET_SPECIFIC }}/signing/keyStore
+          KEYALIAS: ${{ secrets.OP_ENTRY_TARGET_SPECIFIC }}/signing/keyAlias
+          GH_DIR: ${{ secrets.OP_ENTRY_TARGET_SPECIFIC }}/keystroke/directory
+          GH_GIT: ${{ secrets.OP_ENTRY_TARGET_SPECIFIC }}/keystroke/repository
+          GH_REF: ${{ secrets.OP_ENTRY_TARGET_SPECIFIC }}/keystroke/ref
+          GH_PAT: ${{ secrets.OP_ENTRY_TARGET_SPECIFIC }}/keystroke/PAT
+
+      - name: Checkout Keystore
+        uses: actions/checkout@v7
+        with:
+          token: ${{ steps.keystore.outputs.GH_PAT }}
+          repository: ${{ steps.keystore.outputs.GH_GIT }}
+          ref: ${{ steps.keystore.outputs.GH_REF }}
+          path: ${{ steps.keystore.outputs.GH_DIR }}
+          submodules: true
+          persist-credentials: false
+
+      - name: Patch
+        run: |
+          java -jar ${{ steps.patcher.outputs.file }} patch \
+            --out=./${{ inputs.name }}.apk \
+            --patches=${{ steps.patches.outputs.file }} \
+            --keystore-password=${{ steps.keystore.outputs.KEYSTORE }} \
+            --keystore-entry-password=${{ steps.keystore.outputs.KEYALIAS }} \
+            ${{ steps.keystore.outputs.PATCHER_GENERIC_ARGUMENT }} \
+            ${{ steps.keystore.outputs.PATCHER_SPECIFIC_OPTIONS }} \
+            ${{ steps.source.outputs.file }}
+
+      - name: Release
+        uses: softprops/action-gh-release@v3
+        with:
+          tag_name: latest
+          files: ${{ inputs.name }}

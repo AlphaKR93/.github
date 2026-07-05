@@ -1,0 +1,74 @@
+# schema: https://www.schemastore.org/github-workflow.json
+
+name: Check updates
+on:
+  schedule:
+    - cron: "0 0 * * *"
+  push:
+    paths:
+      - '.github/workflows/ci.yml'
+  workflow_dispatch:
+    inputs:
+      to-patch:
+        description: 'Patch to run'
+        required: true
+        default: 'all'
+        type: choice
+        options:
+          - 'all'
+          - 'youtube-rvx_anddea-beta'
+          - 'youtube_music-rvx_anddea-beta'
+
+jobs:
+  check:
+    name: Check updates
+    runs-on: ubuntu-slim
+    outputs:
+      rvx_anddea-beta: ${{ steps.rvx_anddea-beta.outputs.result }}
+    steps:
+      - uses: actions/checkout@v7
+        if: github.event_name != 'workflow_dispatch' || inputs.to-patch == 'all'
+      - uses: ./.github/actions/network
+        if: github.event_name != 'workflow_dispatch' || inputs.to-patch == 'all'
+
+      - # noinspection YAMLSchemaValidation
+        # Betas
+        parallel:
+          - id: rvx_anddea-beta
+            if: github.event_name != 'workflow_dispatch' || inputs.to-patch == 'all'
+            name: Check new patch RVX (Anddea)
+            uses: ./actions/check-updates
+            with:
+              repository: anddea/revanced-patches
+              release-file: 'youtube-rvx_anddea-beta.apk'
+              target-file: '^.*\.(jar|rvp|mpp)$'
+              pre-release: true
+
+  patch-youtube-rvx_anddea-beta:
+    needs: check
+    if: needs.check.outputs.rvx_anddea-beta == 'true' || inputs.to-patch == 'youtube-rvx_anddea-beta'
+    name: Patch YouTube (anddea/revanced-extended, beta)
+    uses: ./.github/workflows/.patch.yaml
+    secrets: inherit
+    with:
+      name: 'youtube-rvx_anddea-beta'
+      package-id: 'com.google.android.youtube'
+      patches-repo: 'anddea/revanced-patches'
+      patches-beta: true
+      patcher-repo: 'MorpheApp/morphe-cli'
+      patcher-beta: true
+      apkmirror: 'google-inc/youtube/youtube-{version}-release'
+  youtube_music-rvx_anddea-beta:
+    needs: check
+    if: needs.check.outputs.rvx_anddea-beta == 'true' || inputs.to-patch == 'youtube_music-rvx_anddea-beta'
+    name: Patch YouTube Music (anddea/revanced-extended, beta)
+    uses: ./.github/workflows/.patch.yaml
+    secrets: inherit
+    with:
+      name: 'youtube_music-rvx_anddea-beta'
+      package-id: 'com.google.android.apps.youtube.music'
+      patches-repo: 'anddea/revanced-patches'
+      patches-beta: true
+      patcher-repo: 'MorpheApp/morphe-cli'
+      patcher-beta: true
+      apkmirror: 'google-inc/youtube-music/youtube-music-{version}-release'
