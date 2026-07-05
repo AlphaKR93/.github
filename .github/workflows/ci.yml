@@ -18,6 +18,8 @@ on:
           - 'all'
           - 'youtube-rvx_anddea-beta'
           - 'youtube_music-rvx_anddea-beta'
+permissions:
+  contents: write
 
 jobs:
   check:
