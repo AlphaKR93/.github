@@ -98,3 +98,4 @@ jobs:
       patcher-repo: 'MorpheApp/morphe-cli'
       patcher-beta: true
       apkmirror: 'google-inc/photomath/photomath-{version}-release'
+      unsafe-useLatestVersionFromSources: true
