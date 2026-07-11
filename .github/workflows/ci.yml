@@ -18,6 +18,7 @@ on:
           - 'all'
           - 'youtube-rvx_anddea-beta'
           - 'youtube_music-rvx_anddea-beta'
+          - 'photomath'
 permissions:
   contents: write
 
@@ -27,15 +28,14 @@ jobs:
     runs-on: ubuntu-slim
     outputs:
       rvx_anddea-beta: ${{ steps.rvx_anddea-beta.outputs.result }}
+      devanced: ${{ steps.devanced.outputs.result }}
     steps:
       - uses: actions/checkout@v7
         if: github.event_name != 'workflow_dispatch' || inputs.to-patch == 'all'
       - uses: ./.github/actions/network
         if: github.event_name != 'workflow_dispatch' || inputs.to-patch == 'all'
 
-      - # noinspection YAMLSchemaValidation
-        # Betas
-        parallel:
+      - parallel:
           - id: rvx_anddea-beta
             if: github.event_name != 'workflow_dispatch' || inputs.to-patch == 'all'
             name: Check new patch RVX (Anddea)
@@ -45,10 +45,19 @@ jobs:
               release-file: 'youtube-rvx_anddea-beta.apk'
               target-file: '^.*\.(jar|rvp|mpp)$'
               pre-release: true
+          - id: devanced
+            if: github.event_name != 'workflow_dispatch' || inputs.to-patch == 'all'
+            name: Check new patch RVX (DeVanced)
+            uses: ./actions/check-updates
+            with:
+              repository: 'RookieEnough/De-Vanced'
+              release-file: 'photomath.apk'
+              target-file: '^.*\.(jar|rvp|mpp)$'
+              pre-release: true
 
   patch-youtube-rvx_anddea-beta:
     needs: check
-    if: needs.check.outputs.rvx_anddea-beta == 'true' || inputs.to-patch == 'youtube-rvx_anddea-beta'
+    if: needs.check.outputs.rvx_anddea-beta || inputs.to-patch == 'youtube-rvx_anddea-beta'
     name: Patch YouTube (anddea/revanced-extended, beta)
     uses: ./.github/workflows/.patch.yaml
     secrets: inherit
@@ -60,9 +69,9 @@ jobs:
       patcher-repo: 'MorpheApp/morphe-cli'
       patcher-beta: true
       apkmirror: 'google-inc/youtube/youtube-{version}-release'
-  youtube_music-rvx_anddea-beta:
+  patch-youtube_music-rvx_anddea-beta:
     needs: check
-    if: needs.check.outputs.rvx_anddea-beta == 'true' || inputs.to-patch == 'youtube_music-rvx_anddea-beta'
+    if: needs.check.outputs.rvx_anddea-beta || inputs.to-patch == 'youtube_music-rvx_anddea-beta'
     name: Patch YouTube Music (anddea/revanced-extended, beta)
     uses: ./.github/workflows/.patch.yaml
     secrets: inherit
@@ -74,3 +83,18 @@ jobs:
       patcher-repo: 'MorpheApp/morphe-cli'
       patcher-beta: true
       apkmirror: 'google-inc/youtube-music/youtube-music-{version}-release'
+
+  patch-photomath_devanced:
+    needs: check
+    if: needs.check.outputs.devanced || inputs.to-patch == 'photomath'
+    name: Patch Photomath (DeVanced)
+    uses: ./.github/workflows/.patch.yaml
+    secrets: inherit
+    with:
+      name: 'photomath'
+      package-id: 'com.microblink.photomath'
+      patches-repo: 'RookieEnough/De-Vanced'
+      patches-beta: true
+      patcher-repo: 'MorpheApp/morphe-cli'
+      patcher-beta: true
+      apkmirror: 'google-inc/photomath/photomath-{version}-release'
