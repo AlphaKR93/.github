@@ -16,6 +16,18 @@ on:
         type: string
         required: true
         description: 'Package ID of the app'
+      arch:
+        type: string
+        required: false
+        default: ''
+      dpi:
+        type: string
+        required: false
+        default: ''
+      min-sdk:
+        type: string
+        required: false
+        default: ''
 
       patcher-repo:
         type: string
@@ -130,16 +142,21 @@ jobs:
           echo "version=$VERSION" >> $GITHUB_OUTPUT
 
       - id: source
-        name: Download YouTube APK from APKMirror
+        name: Download files from APKMirror
         uses: ./actions/download-apkmirror
         with:
           publisher-id: ${{ steps.version.outputs.publisher-id }}
           app-category: ${{ steps.version.outputs.app-category }}
           template: ${{ steps.version.outputs.template }}
           apk-name: ${{ steps.version.outputs.app-category }} # TODO: Deprecate & remove this
-          version-excepts: ''
-          unsafe-dangerouslyUseLatestVersionFromApkMirror: ${{ inputs.unsafe-useLatestVersionFromSources }}
           version: ${{ steps.version.outputs.version }}
+          version-excepts: ''
+          # version-regex: ''
+          # bundle: ''  # TODO: Add bundle support
+          arch: ${{ inputs.arch }}
+          dpi: ${{ inputs.dpi }}
+          min-sdk: ${{ inputs.min-sdk }}
+          unsafe-dangerouslyUseLatestVersionFromApkMirror: ${{ inputs.unsafe-useLatestVersionFromSources }}
 
       - name: Retrieve secrets from 1Password
         id: keystore
