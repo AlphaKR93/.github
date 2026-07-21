@@ -57,7 +57,7 @@ jobs:
 
   patch-youtube-rvx_anddea-beta:
     needs: check
-    if: needs.check.outputs.rvx_anddea-beta || inputs.to-patch == 'youtube-rvx_anddea-beta'
+    if: needs.check.outputs.rvx_anddea-beta == 'true' || inputs.to-patch == 'youtube-rvx_anddea-beta'
     name: Patch YouTube (anddea/revanced-extended, beta)
     uses: ./.github/workflows/.patch.yaml
     secrets: inherit
@@ -71,7 +71,7 @@ jobs:
       apkmirror: 'google-inc/youtube/youtube-{version}-release'
   patch-youtube_music-rvx_anddea-beta:
     needs: check
-    if: needs.check.outputs.rvx_anddea-beta || inputs.to-patch == 'youtube_music-rvx_anddea-beta'
+    if: needs.check.outputs.rvx_anddea-beta == 'true' || inputs.to-patch == 'youtube_music-rvx_anddea-beta'
     name: Patch YouTube Music (anddea/revanced-extended, beta)
     uses: ./.github/workflows/.patch.yaml
     secrets: inherit
@@ -87,7 +87,7 @@ jobs:
 
   patch-photomath_devanced:
     needs: check
-    if: needs.check.outputs.devanced || inputs.to-patch == 'photomath'
+    if: needs.check.outputs.devanced == 'true' || inputs.to-patch == 'photomath'
     name: Patch Photomath (DeVanced)
     uses: ./.github/workflows/.patch.yaml
     secrets: inherit
