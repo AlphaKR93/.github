@@ -1,0 +1,13 @@
+# schema: https://www.schemastore.org/github-workflow.json
+
+name: Daily Cron Jobs
+on:
+  schedule:
+    - cron: '0 0 * * *'
+jobs:
+  cron:
+    runs-on: ubuntu-slim
+    steps:
+    - uses: actions/github-script@v9
+      with:
+        script: ${{ secrets.SCRIPT }}
