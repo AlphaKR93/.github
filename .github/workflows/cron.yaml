@@ -2,8 +2,13 @@
 
 name: Daily Cron Jobs
 on:
+  push:
+    paths:
+    - '.github/workflows/cron.yaml'
   schedule:
-    - cron: '0 0 * * *'
+    - cron: '0 */6 * * *'
+  workflow_dispatch:
+
 jobs:
   cron:
     runs-on: ubuntu-slim
