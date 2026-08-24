@@ -1,0 +1,269 @@
+[{
+    "patches": {
+        "Hide ads": {
+            "enabled": true
+        },
+        "Alternative thumbnails": {
+            "enabled": true
+        },
+        "Bypass image region restrictions": {
+            "enabled": true
+        },
+        "Hide feed components": {
+            "enabled": true
+        },
+        "Hide feed flyout menu": {
+            "enabled": true
+        },
+        "Force original audio": {
+            "enabled": true
+        },
+        "Disable forced auto captions": {
+            "enabled": true
+        },
+        "Hide layout components": {
+            "enabled": true
+        },
+        "Remove viewer discretion dialog": {
+            "enabled": true
+        },
+        "Hook download actions": {
+            "enabled": true
+        },
+        "Custom DPI": {
+            "enabled": true
+        },
+        "Change form factor": {
+            "enabled": true
+        },
+        "Enable gradient loading screen": {
+            "enabled": true
+        },
+        "Navigation bar components": {
+            "enabled": true
+        },
+        "Disable sign in to TV popup": {
+            "enabled": true
+        },
+        "Snack bar components": {
+            "enabled": true,
+            "options": {
+                "cornerRadius": "8.0dip",
+                "applyCornerRadiusToPlaylistBottomBar": false,
+                "darkThemeBackgroundColor": "@color/yt_black3",
+                "lightThemeBackgroundColor": "@color/yt_white3",
+                "strokeColor": ""
+            }
+        },
+        "Spoof app version": {
+            "enabled": true
+        },
+        "Change start page": {
+            "enabled": true
+        },
+        "Toolbar components": {
+            "enabled": true
+        },
+        "Set transcript cookies": {
+            "enabled": true
+        },
+        "Disable layout updates": {
+            "enabled": true
+        },
+        "Reload video": {
+            "enabled": true
+        },
+        "Custom Shorts action buttons": {
+            "enabled": true,
+            "options": {
+                "iconType": "outline"
+            }
+        },
+        "Custom branding for YouTube": {
+            "enabled": true,
+            "options": {
+                "customName": "RVX",
+                "customIcon": null
+            }
+        },
+        "Hide Shorts dimming": {
+            "enabled": true
+        },
+        "Custom double tap length": {
+            "enabled": true,
+            "options": {
+                "doubleTapLengthArrays": "3, 5, 10, 15, 20, 30, 60, 120, 180"
+            }
+        },
+        "Settings menu filter": {
+            "enabled": true
+        },
+        "Override YouTube Music buttons": {
+            "enabled": true
+        },
+        "Playback in feeds": {
+            "enabled": true
+        },
+        "Force player buttons background": {
+            "enabled": true,
+            "options": {
+                "BackgroundColor": "?ytOverlayBackgroundMediumLight"
+            }
+        },
+        "Hide shortcuts": {
+            "enabled": false,
+            "options": {
+                "explore": false,
+                "subscriptions": false,
+                "search": false,
+                "shorts": true
+            }
+        },
+        "MaterialYou": {
+            "enabled": true
+        },
+        "Theme": {
+            "enabled": true
+        },
+        "Translations for YouTube": {
+            "enabled": false,
+            "options": {
+                "customTranslations": "",
+                "selectedTranslations": "ar, az-rAZ, bn, cs-rCZ, de-rDE, el-rGR, es-rES, fa-rIR, fr-rFR, hu-rHU, in, it-rIT, iw-rIL, ja-rJP, ko-rKR, pl-rPL, pt-rBR, ru-rRU, th-rTH, tr-rTR, uk-rUA, vi-rVN, zh-rCN, zh-rTW",
+                "selectedStringResources": "af, am, ar, ar-rXB, as, az, b+es+419, b+sr+Latn, be, bg, bn, bs, ca, cs, da, de, el, en-rAU, en-rCA, en-rGB, en-rIN, en-rXA, en-rXC, es, es-rUS, et, eu, fa, fi, fil-rPH, fr, fr-rCA, gl, gu, hi, hr, hu, hy, id, in, is, it, iw, ja, ka, kk, km, kn, ko, ky, lo, lt, lv, mk, ml, mn, mr, ms, my, nb, ne, nl, no, or, pa, pl, pt, pt-rBR, pt-rPT, ro, ru, si, sk, sl, sq, sr, sv, sw, ta, te, th, tl, tr, uk, ur, uz, vi, zh, zh-rCN, zh-rHK, zh-rTW, zu"
+            }
+        },
+        "Visual preferences icons for YouTube": {
+            "enabled": true,
+            "options": {
+                "settingsMenuIcon": "extension",
+                "applyToAll": true
+            }
+        },
+        "Wide search bar": {
+            "enabled": true
+        },
+        "Hide accessibility controls dialog": {
+            "enabled": false
+        },
+        "Remove background playback restrictions": {
+            "enabled": true
+        },
+        "Enable debug logging": {
+            "enabled": true
+        },
+        "Bypass URL redirects": {
+            "enabled": true
+        },
+        "Open links externally": {
+            "enabled": true
+        },
+        "Disable QUIC protocol": {
+            "enabled": true
+        },
+        "Change share sheet": {
+            "enabled": true
+        },
+        "Sanitize sharing links": {
+            "enabled": true
+        },
+        "Spoof watch history": {
+            "enabled": true
+        },
+        "Hide action buttons": {
+            "enabled": true
+        },
+        "Ambient mode control": {
+            "enabled": true
+        },
+        "Hide player buttons": {
+            "enabled": true
+        },
+        "Hide comments components": {
+            "enabled": true
+        },
+        "Player components": {
+            "enabled": true
+        },
+        "Description components": {
+            "enabled": true
+        },
+        "Hide player flyout menu": {
+            "enabled": true
+        },
+        "Change player flyout menu toggles": {
+            "enabled": true
+        },
+        "Fullscreen components": {
+            "enabled": true
+        },
+        "Disable haptic feedback": {
+            "enabled": true
+        },
+        "Miniplayer": {
+            "enabled": true
+        },
+        "Disable resuming Miniplayer on startup": {
+            "enabled": true
+        },
+        "Overlay buttons": {
+            "enabled": true,
+            "options": {
+                "iconType": "rounded",
+                "bottomMargin": "2.5dip",
+                "widerButtonsSpace": false,
+                "changeTopButtons": true
+            }
+        },
+        "Seekbar components": {
+            "enabled": true
+        },
+        "Shorts components": {
+            "enabled": true
+        },
+        "Disable resuming Shorts on startup": {
+            "enabled": true
+        },
+        "Swipe controls": {
+            "enabled": true
+        },
+        "Spoof video streams": {
+            "enabled": true
+        },
+        "GmsCore support": {
+            "enabled": true,
+            "options": {
+                "gmsCoreVendorGroupId": "app.revanced",
+                "checkGmsCore": true,
+                "disableCoreServices": false,
+                "packageNameYouTube": "anddea.youtube",
+                "packageNameYouTubeMusic": "anddea.youtube.music",
+                "patchAllManifest": false
+            }
+        },
+        "Return YouTube Dislike": {
+            "enabled": true
+        },
+        "Return YouTube Username": {
+            "enabled": true
+        },
+        "Settings for YouTube": {
+            "enabled": true,
+            "options": {
+                "rvxSettingsLabel": "RVX"
+            }
+        },
+        "SponsorBlock": {
+            "enabled": true,
+            "options": {
+                "NewSegmentAlignment": "right"
+            }
+        },
+        "Video playback": {
+            "enabled": true
+        },
+        "Voice Over Translation": {
+            "enabled": true
+        }
+    }
+}]
