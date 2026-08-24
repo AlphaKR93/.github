@@ -131,9 +131,10 @@ jobs:
           echo "app-category=$(echo '${{ inputs.apkmirror }}' | cut -d '/' -f 2)" >> $GITHUB_OUTPUT
           echo "template=$(echo '${{ inputs.apkmirror }}' | cut -d '/' -f 3)" >> $GITHUB_OUTPUT
 
-          VERSIONS=$(java -jar ${{ steps.patcher.outputs.file }} list-versions --prerelease \
+          JSTDOUT=$(java -jar ${{ steps.patcher.outputs.file }} list-versions --prerelease \
             --patches=${{ steps.patches.outputs.file }} \
-            --filter-package-names=${{ inputs.package-id }} | head -n -1 | tail -n +5)
+            --filter-package-names=${{ inputs.package-id }})
+          VERSIONS=$(echo -e "$JSTDOUT" | head -n -1 | tail -n +3)
           echo -e "$VERSIONS"
           echo -e "\n"
 
