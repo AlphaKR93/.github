@@ -67,7 +67,7 @@ jobs:
           repository: ${{ steps.keystore.outputs.FP_GIT }}
           ref: ${{ steps.keystore.outputs.FP_REF }}
           persist-credentials: false
-          sprase-checkout: |
+          sparse-checkout: |
             flatpak.json
 
       - name: Get current Flatpak version metadata
