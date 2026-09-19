@@ -113,7 +113,7 @@ jobs:
     secrets: inherit
     with:
       id: org.thorium.Thorium
-      file-name: 'thorium-browser_.*_AVX2\.AppImage'
+      file-name: 'Thorium_Browser_.*_AVX2\.AppImage'
       file-type: AppImage
       download-uri: gz83/thorium
       download-type: github
