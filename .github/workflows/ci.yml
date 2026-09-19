@@ -62,6 +62,7 @@ jobs:
           GH_PAT: ${{ secrets.OP_ENTRY_FLATPAK_GENERIC }}/credential
 
       - name: Checkout Flatpak Version Metadata
+        if: github.event_name != 'workflow_dispatch' || inputs.to-patch == 'all'
         uses: actions/checkout@v7
         with:
           token: ${{ steps.keystore.outputs.GH_PAT }}
@@ -73,6 +74,7 @@ jobs:
             flatpak.json
 
       - name: Get current Flatpak version metadata
+        if: github.event_name != 'workflow_dispatch' || inputs.to-patch == 'all'
         id: flatpak
         run: |
           echo "config=$(echo '${{ steps.keystore.outputs.FP_CFG }}' | jq -c '.')" >> $GITHUB_OUTPUT
