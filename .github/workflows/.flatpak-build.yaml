@@ -61,7 +61,7 @@ jobs:
           export-env: false
         env:
           OP_SERVICE_ACCOUNT_TOKEN: ${{ secrets.OP_SERVICE_ACCOUNT_TOKEN }}
-          GH_PAT: ${{ secrets.OP_ENTRY_FLATPAK_BUILDER }}/credential
+          GH_PAT: ${{ secrets.OP_ENTRY_FLATPAK_GENERIC }}/credential
           KS_GIT: ${{ secrets.OP_ENTRY_FLATPAK_BUILDER }}/keystroke/repository
           KS_REF: ${{ secrets.OP_ENTRY_FLATPAK_BUILDER }}/keystroke/ref
           FP_GIT: ${{ secrets.OP_ENTRY_FLATPAK_BUILDER }}/flatpak/repository

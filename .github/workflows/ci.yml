@@ -56,9 +56,10 @@ jobs:
           export-env: false
         env:
           OP_SERVICE_ACCOUNT_TOKEN: ${{ secrets.OP_SERVICE_ACCOUNT_TOKEN }}
-          GH_PAT: ${{ secrets.OP_ENTRY_FLATPAK_BUILDER }}/credential
           FP_GIT: ${{ secrets.OP_ENTRY_FLATPAK_BUILDER }}/flatpak/repository
           FP_REF: ${{ secrets.OP_ENTRY_FLATPAK_BUILDER }}/flatpak/ref
+          FP_CFG: ${{ secrets.OP_ENTRY_FLATPAK_GENERIC }}
+          GH_PAT: ${{ secrets.OP_ENTRY_FLATPAK_GENERIC }}/credential
 
       - name: Checkout Flatpak Version Metadata
         uses: actions/checkout@v7
@@ -67,13 +68,15 @@ jobs:
           repository: ${{ steps.keystore.outputs.FP_GIT }}
           ref: ${{ steps.keystore.outputs.FP_REF }}
           persist-credentials: false
+          path: dist
           sparse-checkout: |
             flatpak.json
 
       - name: Get current Flatpak version metadata
         id: flatpak
         run: |
-          echo "current=$(cat flatpak.json)" >> $GITHUB_OUTPUT
+          echo "config=${{ steps.keystore.outputs.FP_CFG }}" >> $GITHUB_OUTPUT
+          echo "current=$(cat dist/flatpak.json)" >> $GITHUB_OUTPUT
 
       - parallel:
         - id: rvx-anddea-beta
@@ -116,15 +119,15 @@ jobs:
           name: Check new release (Beeper Nightly)
           run:
             node scripts/flatpak/electron.mjs \
-              'https://api.beeper.com/desktop/update-feed/latest-linux.yml?bundleId=com.automattic.beeper.desktop.nightly&platform=linux&arch=x64&channel=nightly' \
-              'https://api.beeper.com/desktop/download/linux/x64/nightly/com.automattic.beeper.desktop' >> $GITHUB_OUTPUT
+              '${{ fromJSON(steps.flatpak.outputs.config).beeper.electron }}' \
+              '${{ fromJSON(steps.flatpak.outputs.config).beeper.fallback }}' >> $GITHUB_OUTPUT
         - id: flatpak-openinterpreter
           if: github.event_name != 'workflow_dispatch' || inputs.to-patch == 'all'
           name: Check new release (OpenInterpreter Desktop)
           run:
             node scripts/flatpak/electron.mjs \
-              'https://auth.openinterpreter.com/storage/v1/object/public/workstationupdater/releases/latest-linux.yml' \
-              'https://openinterpreter.com/download/linux/appimage' >> $GITHUB_OUTPUT
+              '${{ fromJSON(steps.flatpak.outputs.config).interpreter.electron }}' \
+              '${{ fromJSON(steps.flatpak.outputs.config).interpreter.fallback }}' >> $GITHUB_OUTPUT
 
   patch-youtube-rvx_anddea-beta:
     needs: check
