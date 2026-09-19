@@ -36,7 +36,7 @@ jobs:
       rvx-anddea-beta: ${{ steps.rvx-anddea-beta.outputs.result }}
       rvx-devanced: ${{ steps.rvx-devanced.outputs.result }}
       flatpak: ${{ steps.flatpak.outputs.current }}
-      flatpak-thorium: ${{ steps.flatpak-thorium.outputs.result }}
+      flatpak-thorium: ${{ steps.flatpak-thorium.outputs.tag }}
       flatpak-beeper: ${{ steps.flatpak-beeper.outputs.result }}
       flatpak-openinterpreter: ${{ steps.flatpak-openinterpreter.outputs.result }}
       flatpak-thunderbird: ${{ steps.flatpak-thunderbird.outputs.result }}
@@ -128,8 +128,6 @@ jobs:
             node scripts/flatpak/electron.mjs \
               'https://auth.openinterpreter.com/storage/v1/object/public/workstationupdater/releases/latest-linux.yml' \
               'https://openinterpreter.com/download/linux/appimage' >> $GITHUB_OUTPUT
-      - run: |
-          echo '${{ steps.flatpak.outputs.current }}' 
 
   patch-youtube-rvx_anddea-beta:
     needs: check
