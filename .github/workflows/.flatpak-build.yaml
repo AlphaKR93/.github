@@ -98,7 +98,7 @@ jobs:
             repository: ${{ inputs.download-uri }}
             file: ${{ inputs.file-name }}
             pre-release: ${{ inputs.download-type-github-prerelease }}
-            name: source.${{ inputs.package-type }}
+            name: source.${{ inputs.file-type }}
 
       - name: Build Flatpak bundle
         uses: flatpak/flatpak-github-actions/flatpak-builder@v6
