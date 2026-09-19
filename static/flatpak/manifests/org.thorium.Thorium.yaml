@@ -41,7 +41,7 @@ modules:
       - |
         for icon in squashfs-root/usr/share/icons/hicolor/*/apps/thorium-browser.png; do
           size=$(basename "$(dirname "$(dirname "$f")")");
-          install -Dm644 "$f" "/app/share/icons/hicolor/$size/apps/org.thorium.Thorium.png";
+          install -Dm644 "$icon" "/app/share/icons/hicolor/$size/apps/org.thorium.Thorium.png";
         done
       # Install desktop file
       - install -Dm644 squashfs-root/thorium-browser.desktop /app/share/applications/org.thorium.Thorium.desktop
