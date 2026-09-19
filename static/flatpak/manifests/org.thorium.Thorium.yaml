@@ -28,6 +28,23 @@ finish-args:
   - --env=CHROME_WRAPPER=/app/bin/thorium
 
 modules:
+  # apply_extra (below) runs at install time with no /proc, so the AppImage's own
+  # `--appimage-extract` can't be used there (it needs /proc/self/exe to find its
+  # own appended squashfs data -- confirmed by reproducing its exact failure with
+  # /proc masked). unsquashfs operates on the file directly and doesn't need it, so
+  # we build it from source (per docs.flatpak.org/en/latest/module-sources.html
+  # #file-sources) and ship it in /app/bin instead.
+  - name: unsquashfs
+    buildsystem: simple
+    build-commands:
+      - GZIP_SUPPORT=1 XZ_SUPPORT=1 LZO_SUPPORT=1 LZ4_SUPPORT=1 ZSTD_SUPPORT=1 make -C squashfs-tools -j ${FLATPAK_BUILDER_N_JOBS} unsquashfs
+      - install -Dpm755 -t /app/bin squashfs-tools/unsquashfs
+    sources:
+      - type: git
+        url: https://github.com/plougher/squashfs-tools
+        tag: 4.6.1
+        commit: d8cb82d9840330f9344ec37b992595b5d7b44184
+
   - name: thorium
     buildsystem: simple
     build-commands:
@@ -61,13 +78,31 @@ modules:
         size: 0
       # Runs at install time on the end user's machine, with cwd=/app/extra and no
       # network access. thorium.AppImage here is the extra-data download above.
+      # AppImages are an ELF stub with a squashfs image appended; unsquashfs needs
+      # the exact byte offset where the squashfs actually starts (unlike a bare
+      # snap/squashfs file, it won't find it on its own), so every occurrence of the
+      # squashfs magic bytes is tried in turn -- `-l` (list) is cheap and fails
+      # cleanly on a false match -- until one actually parses as a real superblock.
       - type: script
         dest-filename: apply_extra
         commands:
-          - chmod +x thorium.AppImage
-          - ./thorium.AppImage --appimage-extract
-          - mv squashfs-root/usr/bin thorium
-          - rm -rf squashfs-root thorium.AppImage
+          - |
+            set -e
+            off=""
+            for candidate in $(grep -abo hsqs thorium.AppImage | cut -d: -f1); do
+              if unsquashfs -o "$candidate" -l thorium.AppImage >/dev/null 2>&1; then
+                off="$candidate"
+                break
+              fi
+            done
+            if [ -z "$off" ]; then
+              echo "apply_extra: could not locate a SQUASHFS superblock in thorium.AppImage" >&2
+              exit 1
+            fi
+            unsquashfs -no-progress -o "$off" -d squashfs-root thorium.AppImage usr/bin
+            mv squashfs-root/usr/bin thorium
+            rm -rf squashfs-root thorium.AppImage
+            test -x thorium/thorium
       - type: script
         dest-filename: thorium.sh
         commands:
