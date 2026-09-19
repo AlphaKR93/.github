@@ -62,20 +62,20 @@ on:
           beyond the main one above. Each entry: { "filename": string, "url": string }.
           Used e.g. by com.discord.DiscordDevelopment to inject Vencord/OpenAsar.
 
-      fingerprint:
+      check-key:
         type: string
-        required: false
-        default: ''
+        required: true
         description: |
-          Fingerprint of the currently checked release, written into
-          repo/flatpak.yaml under `fingerprint-key`. Leave empty (together with
-          fingerprint-key) to skip updating repo/flatpak.yaml, e.g. for
-          `download-type: github` packages, which are tracked by release tag instead.
-      fingerprint-key:
+          Short package key (e.g. "thorium", "beeper", "discord-development"), used as
+          the lookup key in dist/flatpak.json (see ci.yml's `check` job) and, for
+          `download-type: direct` packages, in repo/flatpak.yaml.
+      check-value:
         type: string
-        required: false
-        default: ''
-        description: Top-level key to set in repo/flatpak.yaml. Leave empty to skip updating it.
+        required: true
+        description: |
+          The version marker to record under `check-key` once this build succeeds, so
+          the next `check` run knows this release was already built: the release tag
+          for `download-type: github`, the check step's fingerprint otherwise.
 
     secrets:
       OP_SERVICE_ACCOUNT_TOKEN:
@@ -129,7 +129,8 @@ jobs:
       # source.${{ inputs.file-type }} for icon/desktop-file extraction below); the
       # real url/sha256/size that end up in the manifest are always (re)computed from
       # the downloaded bytes by "Resolve extra-data sources", regardless of
-      # download-type.
+      # download-type. Talks to the GitHub API with regex asset matching, which is
+      # genuinely fiddly to get right in shell, so this stays its own action.
       - id: download-github
         if: inputs.download-type == 'github'
         name: Download from GitHub
@@ -143,7 +144,7 @@ jobs:
       # Downloads (if download-type == direct; a no-op re-hash otherwise, since the
       # file already exists from the step above) and hashes the main package source,
       # plus any additional extra-data sources (e.g. Vencord/OpenAsar for Discord),
-      # producing { filename, url, sha256, size } entries ready for the manifest patch
+      # producing { filename, url, sha256, size } entries for the manifest patch
       # below. Neither of these downloads ever gets embedded in the OSTree repo this
       # job pushes: the main source here is only read for icon/desktop-file
       # extraction, and flatpak itself downloads the real, hash-verified files
@@ -151,14 +152,56 @@ jobs:
       # apply_extra script) -- so GitHub Pages never needs to serve them via LFS.
       - id: extra-data
         name: Resolve extra-data sources
-        uses: ./actions/resolve-flatpak-extra-data
-        with:
-          main: >-
-            {"filename": ${{ toJSON(inputs.main-extra-data-filename) }},
-             "url": ${{ toJSON(inputs.download-type == 'github' && steps.download-github.outputs.url || inputs.download-uri) }},
-             "path": "source.${{ inputs.file-type }}"}
-          extra: ${{ inputs.extra-data }}
+        env:
+          MAIN_FILENAME: ${{ inputs.main-extra-data-filename }}
+          MAIN_URL: ${{ inputs.download-type == 'github' && steps.download-github.outputs.url || inputs.download-uri }}
+          MAIN_PATH: source.${{ inputs.file-type }}
+          EXTRA_JSON: ${{ inputs.extra-data }}
+        run: |
+          python3 - <<'PY'
+          import hashlib, json, os, urllib.request
 
+          def hash_and_size(path):
+              h = hashlib.sha256()
+              with open(path, "rb") as f:
+                  for chunk in iter(lambda: f.read(1 << 20), b""):
+                      h.update(chunk)
+              return h.hexdigest(), os.path.getsize(path)
+
+          def ensure_downloaded(path, url):
+              if os.path.exists(path):
+                  return
+              req = urllib.request.Request(url, headers={"User-Agent": "flatpak-build"})
+              with urllib.request.urlopen(req) as resp, open(path, "wb") as out:
+                  while True:
+                      chunk = resp.read(1 << 20)
+                      if not chunk:
+                          break
+                      out.write(chunk)
+
+          entries = [{
+              "filename": os.environ["MAIN_FILENAME"],
+              "url": os.environ["MAIN_URL"],
+              "path": os.environ["MAIN_PATH"],
+          }]
+          for e in json.loads(os.environ["EXTRA_JSON"]):
+              e = dict(e)
+              e.setdefault("path", e["filename"])
+              entries.append(e)
+
+          resolved = []
+          for e in entries:
+              ensure_downloaded(e["path"], e["url"])
+              sha256, size = hash_and_size(e["path"])
+              resolved.append({"filename": e["filename"], "url": e["url"], "sha256": sha256, "size": size})
+
+          with open(os.environ["GITHUB_OUTPUT"], "a") as f:
+              f.write("entries=" + json.dumps(resolved) + "\n")
+          PY
+
+      # Complex enough (structure-aware YAML lookup across every module's sources,
+      # matched by filename, plus real validation of each field) that it stays its
+      # own type-checked action rather than shell/sed against the raw YAML.
       - name: Patch Flatpak manifest with resolved sources
         uses: ./actions/patch-flatpak-manifest
         with:
@@ -175,13 +218,49 @@ jobs:
           artifact-name: ${{ inputs.id }}.flatpak
           verbose: true
 
+      # dist/flatpak.json (read by ci.yml's `check` job) is what future runs compare
+      # the freshly-fetched tag/fingerprint against to decide whether a rebuild is
+      # needed, so every package (including download-type: github ones) must update
+      # its entry here on a successful build, or `check` will think this release was
+      # never built.
+      - name: Update Flatpak repository check-state
+        env:
+          CHECK_KEY: ${{ inputs.check-key }}
+          CHECK_VALUE: ${{ inputs.check-value }}
+        run: |
+          python3 - <<'PY'
+          import json, os
+
+          key = os.environ["CHECK_KEY"]
+          value = os.environ["CHECK_VALUE"]
+          path = "repo/flatpak.json"
+          try:
+              with open(path) as f:
+                  data = json.load(f)
+          except FileNotFoundError:
+              data = {}
+          data[key] = value
+          with open(path, "w") as f:
+              json.dump(data, f, indent=2, sort_keys=True)
+              f.write("\n")
+          PY
+
+      # repo/flatpak.yaml is the fingerprint index the GitHub Pages front-end reads.
+      # download-type: github packages (currently just Thorium) are tracked by
+      # release tag in flatpak.json above instead, so they're skipped here.
       - name: Update Flatpak repository fingerprint index
-        if: inputs.fingerprint-key != ''
-        uses: ./actions/patch-flatpak-index
-        with:
-          file: repo/flatpak.yaml
-          key: ${{ inputs.fingerprint-key }}
-          value: ${{ inputs.fingerprint }}
+        if: inputs.download-type == 'direct'
+        env:
+          CHECK_KEY: ${{ inputs.check-key }}
+          CHECK_VALUE: ${{ inputs.check-value }}
+        run: |
+          set -eu
+          file="repo/flatpak.yaml"
+          touch "$file"
+          grep -v "^${CHECK_KEY}:" "$file" > "${file}.tmp" || true
+          mv "${file}.tmp" "$file"
+          escaped=$(printf '%s' "$CHECK_VALUE" | sed "s/'/''/g")
+          printf "%s: '%s'\n" "$CHECK_KEY" "$escaped" >> "$file"
 
       - name: Commit changes
         run: |

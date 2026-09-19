@@ -190,6 +190,8 @@ jobs:
       download-type: github
       download-type-github-prerelease: true
       main-extra-data-filename: thorium.AppImage
+      check-key: thorium
+      check-value: ${{ needs.check.outputs.flatpak-thorium.tag }}
 
   build-flatpak-beeper:
     needs: check
@@ -203,8 +205,8 @@ jobs:
       download-uri: ${{ fromJSON(needs.check.outputs.flatpak-beeper).download_uri }}
       download-type: direct
       main-extra-data-filename: beeper.AppImage
-      fingerprint: ${{ fromJSON(needs.check.outputs.flatpak-beeper).fingerprint }}
-      fingerprint-key: beeper
+      check-key: beeper
+      check-value: ${{ fromJSON(needs.check.outputs.flatpak-beeper).fingerprint }}
 
   build-flatpak-openinterpreter:
     needs: check
@@ -218,8 +220,8 @@ jobs:
       download-uri: ${{ fromJSON(needs.check.outputs.flatpak-openinterpreter).download_uri }}
       download-type: direct
       main-extra-data-filename: interpreter.AppImage
-      fingerprint: ${{ fromJSON(needs.check.outputs.flatpak-openinterpreter).fingerprint }}
-      fingerprint-key: openinterpreter
+      check-key: openinterpreter
+      check-value: ${{ fromJSON(needs.check.outputs.flatpak-openinterpreter).fingerprint }}
 
   build-flatpak-thunderbird-beta:
     needs: check
@@ -233,8 +235,8 @@ jobs:
       download-uri: ${{ fromJSON(needs.check.outputs.flatpak-thunderbird).download_uri }}
       download-type: direct
       main-extra-data-filename: thunderbird.tar.xz
-      fingerprint: ${{ fromJSON(needs.check.outputs.flatpak-thunderbird).fingerprint }}
-      fingerprint-key: thunderbird
+      check-key: thunderbird
+      check-value: ${{ fromJSON(needs.check.outputs.flatpak-thunderbird).fingerprint }}
 
   build-flatpak-discord-development:
     needs: check
@@ -261,5 +263,5 @@ jobs:
           {"filename": "vencord-renderer.css", "url": "https://github.com/Vendicated/Vencord/releases/latest/download/renderer.css"},
           {"filename": "openasar-app.asar", "url": "https://github.com/GooseMod/OpenAsar/releases/download/nightly/app.asar"}
         ]
-      fingerprint: ${{ fromJSON(needs.check.outputs.flatpak-discord-development).fingerprint }}
-      fingerprint-key: discord-development
+      check-key: discord-development
+      check-value: ${{ fromJSON(needs.check.outputs.flatpak-discord-development).fingerprint }}
