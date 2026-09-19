@@ -35,13 +35,13 @@ jobs:
     outputs:
       rvx-anddea-beta: ${{ steps.rvx-anddea-beta.outputs.result }}
       rvx-devanced: ${{ steps.rvx-devanced.outputs.result }}
-      flatpak: ${{ fromJSON(steps.flatpak.outputs.current) }}
-      flatpak-thorium: ${{ fromJSON(steps.flatpak-thorium.outputs.result) }}
-      flatpak-beeper: ${{ fromJSON(steps.flatpak-beeper.outputs.result) }}
-      flatpak-openinterpreter: ${{ fromJSON(steps.flatpak-openinterpreter.outputs.result) }}
-      flatpak-thunderbird: ${{ fromJSON(steps.flatpak-thunderbird.outputs.result) }}
-      flatpak-discord-development: ${{ fromJSON(steps.flatpak-discord-development.outputs.result) }}
-      flatpak-claude: ${{ fromJSON(steps.flatpak-claude.outputs.result) }}
+      flatpak: ${{ steps.flatpak.outputs.current }}
+      flatpak-thorium: ${{ steps.flatpak-thorium.outputs.result }}
+      flatpak-beeper: ${{ steps.flatpak-beeper.outputs.result }}
+      flatpak-openinterpreter: ${{ steps.flatpak-openinterpreter.outputs.result }}
+      flatpak-thunderbird: ${{ steps.flatpak-thunderbird.outputs.result }}
+      flatpak-discord-development: ${{ steps.flatpak-discord-development.outputs.result }}
+      flatpak-claude: ${{ steps.flatpak-claude.outputs.result }}
     steps:
       - uses: actions/checkout@v7
         if: github.event_name != 'workflow_dispatch' || inputs.to-patch == 'all'
@@ -120,15 +120,15 @@ jobs:
           name: Check new release (Beeper Nightly)
           run:
             node scripts/flatpak/electron.mjs \
-              '${{ fromJSON(steps.flatpak.outputs.config).beeper.electron }}' \
-              '${{ fromJSON(steps.flatpak.outputs.config).beeper.fallback }}' >> $GITHUB_OUTPUT
+              '${{ steps.flatpak.outputs.config.beeper.electron }}' \
+              '${{ steps.flatpak.outputs.config.beeper.fallback }}' >> $GITHUB_OUTPUT
         - id: flatpak-openinterpreter
           if: github.event_name != 'workflow_dispatch' || inputs.to-patch == 'all'
           name: Check new release (OpenInterpreter Desktop)
           run:
             node scripts/flatpak/electron.mjs \
-              '${{ fromJSON(steps.flatpak.outputs.config).interpreter.electron }}' \
-              '${{ fromJSON(steps.flatpak.outputs.config).interpreter.fallback }}' >> $GITHUB_OUTPUT
+              '${{ steps.flatpak.outputs.config.interpreter.electron }}' \
+              '${{ steps.flatpak.outputs.config.interpreter.fallback }}' >> $GITHUB_OUTPUT
 
   patch-youtube-rvx_anddea-beta:
     needs: check
@@ -178,7 +178,7 @@ jobs:
 
   build-flatpak-thorium:
     needs: check
-    if: inputs.to-patch == 'flatpak-thorium' || needs.check.outputs.flatpak-thorium.fingerprint != needs.check.outputs.flatpak.thorium
+    if: inputs.to-patch == 'flatpak-thorium' || fromJSON(needs.check.outputs.flatpak-thorium).fingerprint != fromJSON(needs.check.outputs.flatpak).thorium
     name: Build Thorium
     uses: ./.github/workflows/.flatpak-build.yaml
     secrets: inherit
