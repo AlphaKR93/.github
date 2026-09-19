@@ -109,7 +109,7 @@ jobs:
     needs: check
     if: needs.check.outputs.flatpak-thorium == 'true' || inputs.to-patch == 'flatpak-thorium'
     name: Build Thorium
-    uses: ./.github/workflows/.thorium-build.yaml
+    uses: ./.github/workflows/.flatpak-build.yaml
     secrets: inherit
     with:
       id: org.thorium.Thorium
