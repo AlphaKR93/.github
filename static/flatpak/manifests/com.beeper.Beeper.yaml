@@ -24,26 +24,44 @@ modules:
   - name: beeper
     buildsystem: simple
     build-commands:
+      - install -Dm755 apply_extra -t /app/bin
+      - install -Dm755 beeper.sh /app/bin/beepertexts
       - chmod +x beeper.AppImage
       - ./beeper.AppImage --appimage-extract
-      # Install AppImage
-      - mkdir -p /app/beeper
-      - cp -a squashfs-root/. /app/beeper/
-      - rm -rf /app/beeper/AppRun /app/beeper/beepertexts.{desktop,png} /app/beeper/usr/share
-      - install -Dm755 beeper.sh /app/bin/beepertexts
-      # Copy Resources
-      - cp -a squashfs-root/usr/lib /app/lib
+      # Copy resources
       - install -Dm644 squashfs-root/usr/share/icons/hicolor/512x512/apps/beepertexts.png /app/share/icons/hicolor/512x512/apps/com.beeper.Beeper.png
       # Install desktop file
       - install -Dm644 squashfs-root/beepertexts.desktop /app/share/applications/com.beeper.Beeper.desktop
-      - desktop-file-edit --set-key=Exec --set-value='beeper.sh %U' --set-icon=com.beeper.Beeper /app/share/applications/com.beeper.Beeper.desktop
+      - desktop-file-edit --set-key=Exec --set-value='beepertexts %U' --set-icon=com.beeper.Beeper /app/share/applications/com.beeper.Beeper.desktop
     sources:
+      # Downloaded fresh at build time (discarded after use) purely to extract the icon
+      # and desktop file; only the real download below (verified via extra-data) is
+      # what actually ships in the OSTree repo, so it never needs LFS on GitHub Pages.
       - type: file
         path: source.AppImage
         dest-filename: beeper.AppImage
+      # The real AppImage is never embedded in the build: flatpak downloads it straight
+      # to the end user's machine at install time (see apply_extra below), verified
+      # against this sha256/size.
+      - type: extra-data
+        filename: beeper.AppImage
+        url: 'https://invalid.example/placeholder'
+        sha256: '0000000000000000000000000000000000000000000000000000000000000000'
+        size: 0
+      # Runs at install time on the end user's machine, with cwd=/app/extra and no
+      # network access. beeper.AppImage here is the extra-data download above.
+      - type: script
+        dest-filename: apply_extra
+        commands:
+          - chmod +x beeper.AppImage
+          - ./beeper.AppImage --appimage-extract
+          - mkdir -p beeper
+          - cp -a squashfs-root/. beeper/
+          - rm -rf beeper/AppRun beeper/beepertexts.desktop beeper/beepertexts.png beeper/usr/share
+          - rm -rf squashfs-root beeper.AppImage
       - type: script
         dest-filename: beeper.sh
         commands:
           - export TMPDIR="${XDG_RUNTIME_DIR}/app/${FLATPAK_ID}"
-          - export LD_LIBRARY_PATH="/app/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
-          - exec zypak-wrapper /app/beeper/beepertexts "$@"
+          - export LD_LIBRARY_PATH="/app/extra/beeper/usr/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+          - exec zypak-wrapper /app/extra/beeper/beepertexts "$@"

@@ -25,33 +25,42 @@ finish-args:
   - --talk-name=org.gnome.SessionManager
   - --system-talk-name=org.freedesktop.UPower
   - --own-name=org.mpris.MediaPlayer2.chromium.*
-  - --env=CHROME_WRAPPER=/app/thorium/bin/thorium
+  - --env=CHROME_WRAPPER=/app/bin/thorium
 
 modules:
   - name: thorium
     buildsystem: simple
     build-commands:
       - install -Dm755 apply_extra -t /app/bin
+      - install -Dm755 thorium.sh /app/bin/thorium
       - chmod +x thorium.AppImage
       - ./thorium.AppImage --appimage-extract
       # Copy resources
       - |
         for icon in squashfs-root/usr/share/icons/hicolor/*/apps/thorium-browser.png; do
-          size=$(basename "$(dirname "$(dirname "$f")")");
+          size=$(basename "$(dirname "$(dirname "$icon")")");
           install -Dm644 "$icon" "/app/share/icons/hicolor/$size/apps/org.thorium.Thorium.png";
         done
       # Install desktop file
       - install -Dm644 squashfs-root/thorium-browser.desktop /app/share/applications/org.thorium.Thorium.desktop
       - desktop-file-edit --set-key=Exec --set-value="thorium %U" --set-icon=org.thorium.Thorium /app/share/applications/org.thorium.Thorium.desktop
     sources:
+      # Downloaded fresh at build time (discarded after use) purely to extract the icon
+      # and desktop file; only the real download below (verified via extra-data) is
+      # what actually ships in the OSTree repo, so it never needs LFS on GitHub Pages.
       - type: file
         path: source.AppImage
         dest-filename: thorium.AppImage
+      # The real ~200MB browser is never embedded in the build: flatpak downloads it
+      # straight to the end user's machine at install time (see apply_extra below),
+      # verified against this sha256/size.
       - type: extra-data
         filename: thorium.AppImage
-        url: '<PLACEHOLDER>'
-        sha256: '<PLACEHOLDER>'
-        size: -1
+        url: 'https://invalid.example/placeholder'
+        sha256: '0000000000000000000000000000000000000000000000000000000000000000'
+        size: 0
+      # Runs at install time on the end user's machine, with cwd=/app/extra and no
+      # network access. thorium.AppImage here is the extra-data download above.
       - type: script
         dest-filename: apply_extra
         commands:
@@ -63,4 +72,4 @@ modules:
         dest-filename: thorium.sh
         commands:
           - export TMPDIR="${XDG_RUNTIME_DIR}/app/${FLATPAK_ID}"
-          - exec zypak-wrapper /app/thorium/thorium "$@"
+          - exec zypak-wrapper /app/extra/thorium/thorium "$@"

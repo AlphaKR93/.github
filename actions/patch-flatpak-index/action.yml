@@ -1,0 +1,23 @@
+# $schema: https://www.schemastore.org/github-action.json
+
+name: Patch Flatpak Index
+description: Type-safely upsert a top-level string key (e.g. a package fingerprint) into a flat YAML mapping file, creating the file if it does not exist.
+
+inputs:
+  file:
+    description: Path to the YAML file to patch (created if missing)
+    required: true
+  key:
+    description: Top-level mapping key to set
+    required: true
+  value:
+    description: String value to set the key to
+    required: true
+
+outputs:
+  file:
+    description: Path to the patched file
+
+runs:
+  using: node24
+  main: dist/index.js

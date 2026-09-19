@@ -189,3 +189,77 @@ jobs:
       download-uri: gz83/thorium
       download-type: github
       download-type-github-prerelease: true
+      main-extra-data-filename: thorium.AppImage
+
+  build-flatpak-beeper:
+    needs: check
+    if: inputs.to-patch == 'flatpak-beeper' || fromJSON(needs.check.outputs.flatpak-beeper).fingerprint != fromJSON(needs.check.outputs.flatpak).beeper
+    name: Build Beeper (Nightly)
+    uses: ./.github/workflows/.flatpak-build.yaml
+    secrets: inherit
+    with:
+      id: com.beeper.Beeper
+      file-type: AppImage
+      download-uri: ${{ fromJSON(needs.check.outputs.flatpak-beeper).download_uri }}
+      download-type: direct
+      main-extra-data-filename: beeper.AppImage
+      fingerprint: ${{ fromJSON(needs.check.outputs.flatpak-beeper).fingerprint }}
+      fingerprint-key: beeper
+
+  build-flatpak-openinterpreter:
+    needs: check
+    if: inputs.to-patch == 'flatpak-interpreter' || fromJSON(needs.check.outputs.flatpak-openinterpreter).fingerprint != fromJSON(needs.check.outputs.flatpak).openinterpreter
+    name: Build OpenInterpreter Desktop
+    uses: ./.github/workflows/.flatpak-build.yaml
+    secrets: inherit
+    with:
+      id: com.openinterpreter.Interpreter
+      file-type: AppImage
+      download-uri: ${{ fromJSON(needs.check.outputs.flatpak-openinterpreter).download_uri }}
+      download-type: direct
+      main-extra-data-filename: interpreter.AppImage
+      fingerprint: ${{ fromJSON(needs.check.outputs.flatpak-openinterpreter).fingerprint }}
+      fingerprint-key: openinterpreter
+
+  build-flatpak-thunderbird-beta:
+    needs: check
+    if: inputs.to-patch == 'flatpak-thunderbird-beta' || fromJSON(needs.check.outputs.flatpak-thunderbird).fingerprint != fromJSON(needs.check.outputs.flatpak).thunderbird
+    name: Build Thunderbird (Beta)
+    uses: ./.github/workflows/.flatpak-build.yaml
+    secrets: inherit
+    with:
+      id: org.mozilla.ThunderbirdBeta
+      file-type: tar.xz
+      download-uri: ${{ fromJSON(needs.check.outputs.flatpak-thunderbird).download_uri }}
+      download-type: direct
+      main-extra-data-filename: thunderbird.tar.xz
+      fingerprint: ${{ fromJSON(needs.check.outputs.flatpak-thunderbird).fingerprint }}
+      fingerprint-key: thunderbird
+
+  build-flatpak-discord-development:
+    needs: check
+    if: >-
+      inputs.to-patch == 'flatpak-discord-development' ||
+      fromJSON(needs.check.outputs.flatpak-discord-development).fingerprint != fromJSON(needs.check.outputs.flatpak)['discord-development']
+    name: Build Discord (Development)
+    uses: ./.github/workflows/.flatpak-build.yaml
+    secrets: inherit
+    with:
+      id: com.discord.DiscordDevelopment
+      file-type: tar.gz
+      download-uri: ${{ fromJSON(needs.check.outputs.flatpak-discord-development).download_uri }}
+      download-type: direct
+      main-extra-data-filename: discord.tar.gz
+      # The exact 4 Vencord bundle files (and only those 4) that `VencordInstallerCli
+      # -install` itself downloads, plus OpenAsar's nightly app.asar -- see the
+      # comments in static/flatpak/manifests/com.discord.DiscordDevelopment.yaml.
+      extra-data: >-
+        [
+          {"filename": "vencord-patcher.js", "url": "https://github.com/Vendicated/Vencord/releases/latest/download/patcher.js"},
+          {"filename": "vencord-preload.js", "url": "https://github.com/Vendicated/Vencord/releases/latest/download/preload.js"},
+          {"filename": "vencord-renderer.js", "url": "https://github.com/Vendicated/Vencord/releases/latest/download/renderer.js"},
+          {"filename": "vencord-renderer.css", "url": "https://github.com/Vendicated/Vencord/releases/latest/download/renderer.css"},
+          {"filename": "openasar-app.asar", "url": "https://github.com/GooseMod/OpenAsar/releases/download/nightly/app.asar"}
+        ]
+      fingerprint: ${{ fromJSON(needs.check.outputs.flatpak-discord-development).fingerprint }}
+      fingerprint-key: discord-development

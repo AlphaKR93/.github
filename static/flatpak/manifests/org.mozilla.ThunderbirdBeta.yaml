@@ -1,0 +1,83 @@
+# $schema: https://raw.githubusercontent.com/flatpak/flatpak-builder/main/data/flatpak-manifest.schema.json
+
+id: org.mozilla.ThunderbirdBeta
+runtime: org.freedesktop.Platform
+runtime-version: "25.08"
+sdk: org.freedesktop.Sdk
+command: thunderbird-beta
+
+finish-args:
+  - --share=ipc
+  - --share=network
+  - --socket=x11
+  - --socket=wayland
+  - --socket=pulseaudio
+  - --socket=pcsc
+  - --device=dri
+  - --filesystem=xdg-download
+  - --filesystem=xdg-documents
+  - --talk-name=org.freedesktop.Notifications
+  - --talk-name=org.freedesktop.FileManager1
+  - --talk-name=org.gnome.SessionManager
+  - --system-talk-name=org.freedesktop.UPower
+
+modules:
+  - name: thunderbird
+    buildsystem: simple
+    build-commands:
+      - install -Dm755 apply_extra -t /app/bin
+      - install -Dm755 thunderbird.sh /app/bin/thunderbird-beta
+      - install -Dm644 org.mozilla.ThunderbirdBeta.desktop /app/share/applications/org.mozilla.ThunderbirdBeta.desktop
+      # Copy resources: extract icons from a fresh build-time-only download (discarded
+      # after use), same as the AppImage-based packages in this repo -- only the real
+      # download below (verified via extra-data) is what actually ships in the OSTree
+      # repo, so it never needs LFS on GitHub Pages.
+      - |
+        mkdir -p src
+        tar xf thunderbird-icons-source.tar.xz -C src --strip-components=1
+        for size in 16 22 24 32 48 64 128 256; do
+          icon="src/chrome/icons/default/default${size}.png"
+          if [ -f "$icon" ]; then
+            install -Dm644 "$icon" "/app/share/icons/hicolor/${size}x${size}/apps/org.mozilla.ThunderbirdBeta.png"
+          fi
+        done
+        rm -rf src thunderbird-icons-source.tar.xz
+    sources:
+      - type: file
+        path: source.tar.xz
+        dest-filename: thunderbird-icons-source.tar.xz
+      # The real Thunderbird build is never embedded in the build: flatpak downloads
+      # it straight to the end user's machine at install time (see apply_extra below),
+      # verified against this sha256/size.
+      - type: extra-data
+        filename: thunderbird.tar.xz
+        url: 'https://invalid.example/placeholder'
+        sha256: '0000000000000000000000000000000000000000000000000000000000000000'
+        size: 0
+      # Runs at install time on the end user's machine, with cwd=/app/extra and no
+      # network access. thunderbird.tar.xz here is the extra-data download above.
+      - type: script
+        dest-filename: apply_extra
+        commands:
+          - mkdir -p thunderbird
+          - tar xf thunderbird.tar.xz -C thunderbird --strip-components=1
+          - rm -f thunderbird.tar.xz
+      - type: script
+        dest-filename: thunderbird.sh
+        commands:
+          - export TMPDIR="${XDG_RUNTIME_DIR}/app/${FLATPAK_ID}"
+          - exec /app/extra/thunderbird/thunderbird "$@"
+      - type: inline
+        dest-filename: org.mozilla.ThunderbirdBeta.desktop
+        contents: |
+          [Desktop Entry]
+          Name=Thunderbird (Beta)
+          GenericName=Mail Client
+          Comment=Read, send and manage your email
+          Exec=thunderbird-beta %u
+          Icon=org.mozilla.ThunderbirdBeta
+          Type=Application
+          Categories=Network;Email;
+          MimeType=x-scheme-handler/mailto;message/rfc822;application/x-xpinstall;
+          Terminal=false
+          StartupWMClass=thunderbird-beta

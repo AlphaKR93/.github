@@ -12,20 +12,25 @@ on:
 
       file-name:
         type: string
-        required: true
-        description:
-          Regular expression rule of the downloaded file name
+        required: false
+        default: ''
+        description: |
+          Regular expression rule of the downloaded file name.
+          Only used (and required) for `download-type: github`.
       file-type:
         type: string
         required: true
         description: |
           Type of Package
-          One of: (AppImage)
+          One of: (AppImage, tar.gz, tar.xz)
 
       download-uri:
         type: string
         required: true
-        description: Package download URI of the package
+        description: |
+          Package download URI of the package.
+          For `download-type: github`, the `owner/repo` to look up a release asset in.
+          For `download-type: direct`, the literal, already-resolved download URL.
       download-type:
         type: string
         required: true
@@ -38,6 +43,39 @@ on:
         required: false
         default: false
         description: Whether to use prerelease on GitHub Release
+
+      main-extra-data-filename:
+        type: string
+        required: true
+        description: |
+          The `filename` of the module's main `type: extra-data` source in
+          static/flatpak/manifests/<id>.yaml (e.g. "thorium.AppImage",
+          "discord.tar.gz"). Its `url`/`sha256`/`size` are patched with the values
+          resolved from `download-uri` above.
+
+      extra-data:
+        type: string
+        required: false
+        default: '[]'
+        description: |
+          JSON array of additional `type: extra-data` sources to resolve and patch,
+          beyond the main one above. Each entry: { "filename": string, "url": string }.
+          Used e.g. by com.discord.DiscordDevelopment to inject Vencord/OpenAsar.
+
+      fingerprint:
+        type: string
+        required: false
+        default: ''
+        description: |
+          Fingerprint of the currently checked release, written into
+          repo/flatpak.yaml under `fingerprint-key`. Leave empty (together with
+          fingerprint-key) to skip updating repo/flatpak.yaml, e.g. for
+          `download-type: github` packages, which are tracked by release tag instead.
+      fingerprint-key:
+        type: string
+        required: false
+        default: ''
+        description: Top-level key to set in repo/flatpak.yaml. Leave empty to skip updating it.
 
     secrets:
       OP_SERVICE_ACCOUNT_TOKEN:
@@ -87,22 +125,46 @@ jobs:
           submodules: true
           persist-credentials: false
 
-      # Download packages
-      - parallel:
-        - id: download-github
-          if: inputs.download-type == 'github'
-          name: Download from GitHub
-          uses: ./.github/actions/gh-download-asset
-          with:
-            repository: ${{ inputs.download-uri }}
-            file: ${{ inputs.file-name }}
-            pre-release: ${{ inputs.download-type-github-prerelease }}
-            name: source.${{ inputs.file-type }}
+      # Only resolves which exact release asset to use (and downloads it to
+      # source.${{ inputs.file-type }} for icon/desktop-file extraction below); the
+      # real url/sha256/size that end up in the manifest are always (re)computed from
+      # the downloaded bytes by "Resolve extra-data sources", regardless of
+      # download-type.
+      - id: download-github
+        if: inputs.download-type == 'github'
+        name: Download from GitHub
+        uses: ./.github/actions/gh-download-asset
+        with:
+          repository: ${{ inputs.download-uri }}
+          file: ${{ inputs.file-name }}
+          pre-release: ${{ inputs.download-type-github-prerelease }}
+          name: source.${{ inputs.file-type }}
 
-      - name: Prepare build environments
-        run: |
-          mkdir -p ./dist
-          cp -f static/flatpak/manifests/${{ inputs.id }}.yaml manifests.yaml
+      # Downloads (if download-type == direct; a no-op re-hash otherwise, since the
+      # file already exists from the step above) and hashes the main package source,
+      # plus any additional extra-data sources (e.g. Vencord/OpenAsar for Discord),
+      # producing { filename, url, sha256, size } entries ready for the manifest patch
+      # below. Neither of these downloads ever gets embedded in the OSTree repo this
+      # job pushes: the main source here is only read for icon/desktop-file
+      # extraction, and flatpak itself downloads the real, hash-verified files
+      # straight to the end user's machine at install time (see each manifest's
+      # apply_extra script) -- so GitHub Pages never needs to serve them via LFS.
+      - id: extra-data
+        name: Resolve extra-data sources
+        uses: ./actions/resolve-flatpak-extra-data
+        with:
+          main: >-
+            {"filename": ${{ toJSON(inputs.main-extra-data-filename) }},
+             "url": ${{ toJSON(inputs.download-type == 'github' && steps.download-github.outputs.url || inputs.download-uri) }},
+             "path": "source.${{ inputs.file-type }}"}
+          extra: ${{ inputs.extra-data }}
+
+      - name: Patch Flatpak manifest with resolved sources
+        uses: ./actions/patch-flatpak-manifest
+        with:
+          manifest: static/flatpak/manifests/${{ inputs.id }}.yaml
+          output: manifests.yaml
+          entries: ${{ steps.extra-data.outputs.entries }}
 
       - name: Build Flatpak bundle
         uses: flatpak/flatpak-github-actions/flatpak-builder@v6
@@ -112,6 +174,14 @@ jobs:
           bundle: ${{ inputs.id }}.flatpak
           artifact-name: ${{ inputs.id }}.flatpak
           verbose: true
+
+      - name: Update Flatpak repository fingerprint index
+        if: inputs.fingerprint-key != ''
+        uses: ./actions/patch-flatpak-index
+        with:
+          file: repo/flatpak.yaml
+          key: ${{ inputs.fingerprint-key }}
+          value: ${{ inputs.fingerprint }}
 
       - name: Commit changes
         run: |

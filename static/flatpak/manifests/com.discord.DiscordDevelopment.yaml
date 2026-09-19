@@ -1,0 +1,169 @@
+# $schema: https://raw.githubusercontent.com/flatpak/flatpak-builder/main/data/flatpak-manifest.schema.json
+#
+# Vencord + OpenAsar injection: neither is fetched at build time and neither is fetched
+# by running the real VencordInstallerCli at install time, because `apply_extra` (see
+# below) runs on the end user's machine with NO network access at all -- flatpak only
+# lets a manifest declare fixed, hash-verified `extra-data` downloads. So the exact
+# files the real Vencord installer would download (patcher.js/preload.js/renderer.js/
+# renderer.css from Vendicated/Vencord's latest release, and OpenAsar's nightly
+# app.asar) are each declared below as their own extra-data source, and `apply_extra`
+# places them by hand the same way `VencordInstallerCli -install -install-openasar`
+# would: OpenAsar's app.asar becomes the new "original" app, and a tiny stub app.asar
+# (pre-built below, see vencord-stub.asar) replaces Discord's real app.asar to
+# `require()` Vencord's patcher.js, which in turn loads `_app.asar` (OpenAsar) to
+# actually boot Discord.
+
+id: com.discord.DiscordDevelopment
+runtime: org.freedesktop.Platform
+runtime-version: "25.08"
+sdk: org.freedesktop.Sdk
+base: org.chromium.Chromium.BaseApp
+base-version: "25.08"
+command: discord-development
+
+finish-args:
+  - --share=ipc
+  - --share=network
+  - --socket=x11
+  - --socket=wayland
+  - --socket=pulseaudio
+  - --device=dri
+  - --filesystem=xdg-download
+  - --talk-name=org.freedesktop.Notifications
+  - --talk-name=org.kde.StatusNotifierWatcher
+  - --talk-name=org.freedesktop.secrets
+
+modules:
+  - name: discord
+    buildsystem: simple
+    build-commands:
+      - install -Dm755 apply_extra -t /app/bin
+      - install -Dm755 discord.sh /app/bin/discord-development
+      - install -Dm644 vencord-stub.asar /app/share/vencord/stub.asar
+      - install -Dm644 icon.svg /app/share/icons/hicolor/scalable/apps/com.discord.DiscordDevelopment.svg
+      - install -Dm644 discord-development.desktop /app/share/applications/com.discord.DiscordDevelopment.desktop
+    sources:
+      # The real ~150MB Discord build is never embedded in the build: flatpak
+      # downloads it straight to the end user's machine at install time (see
+      # apply_extra below), verified against this sha256/size. No icon/desktop file
+      # is extracted from it at build time (unlike the AppImage-based packages in
+      # this repo) because Discord's official tarball does not ship one; the icon
+      # below is Flathub's own com.discordapp.Discord.svg, used the same way Flathub
+      # itself uses it (they don't extract one from the tarball either).
+      - type: extra-data
+        filename: discord.tar.gz
+        url: 'https://invalid.example/placeholder'
+        sha256: '0000000000000000000000000000000000000000000000000000000000000000'
+        size: 0
+      # Vencord's 4 prebuilt bundle files, fetched from Vendicated/Vencord's latest
+      # GitHub release -- the exact same 4 files (and only those 4) that
+      # `VencordInstallerCli -install` itself downloads.
+      - type: extra-data
+        filename: vencord-patcher.js
+        url: 'https://github.com/Vendicated/Vencord/releases/latest/download/patcher.js'
+        sha256: '0000000000000000000000000000000000000000000000000000000000000000'
+        size: 0
+      - type: extra-data
+        filename: vencord-preload.js
+        url: 'https://github.com/Vendicated/Vencord/releases/latest/download/preload.js'
+        sha256: '0000000000000000000000000000000000000000000000000000000000000000'
+        size: 0
+      - type: extra-data
+        filename: vencord-renderer.js
+        url: 'https://github.com/Vendicated/Vencord/releases/latest/download/renderer.js'
+        sha256: '0000000000000000000000000000000000000000000000000000000000000000'
+        size: 0
+      - type: extra-data
+        filename: vencord-renderer.css
+        url: 'https://github.com/Vendicated/Vencord/releases/latest/download/renderer.css'
+        sha256: '0000000000000000000000000000000000000000000000000000000000000000'
+        size: 0
+      # OpenAsar's nightly app.asar, the same file `VencordInstallerCli -install-openasar`
+      # downloads.
+      - type: extra-data
+        filename: openasar-app.asar
+        url: 'https://github.com/GooseMod/OpenAsar/releases/download/nightly/app.asar'
+        sha256: '0000000000000000000000000000000000000000000000000000000000000000'
+        size: 0
+      # Runs at install time on the end user's machine, with cwd=/app/extra and no
+      # network access. Every file referenced by name here is one of the extra-data
+      # downloads above.
+      - type: script
+        dest-filename: apply_extra
+        commands:
+          - mkdir -p discord
+          - tar xf discord.tar.gz -C discord --strip-components=1
+          - rm -f discord.tar.gz
+          - mkdir -p discord/resources/vencord
+          - mv vencord-patcher.js discord/resources/vencord/patcher.js
+          - mv vencord-preload.js discord/resources/vencord/preload.js
+          - mv vencord-renderer.js discord/resources/vencord/renderer.js
+          - mv vencord-renderer.css discord/resources/vencord/renderer.css
+          # OpenAsar becomes the "original" app Vencord's stub loads via _app.asar,
+          # exactly as `VencordInstallerCli -install-openasar` followed by `-install`
+          # would leave it.
+          - mv discord/resources/app.asar discord/resources/app.asar.upstream
+          - mv openasar-app.asar discord/resources/_app.asar
+          - cp /app/share/vencord/stub.asar discord/resources/app.asar
+      - type: script
+        dest-filename: discord.sh
+        commands:
+          - export TMPDIR="${XDG_RUNTIME_DIR}/app/${FLATPAK_ID}"
+          - export LD_LIBRARY_PATH="/app/extra/discord${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+          - exec zypak-wrapper "$(find /app/extra/discord -maxdepth 1 -type f -executable -print -quit)" "$@"
+      # A tiny, fully deterministic ASAR archive (reimplementing Vencord/Installer's
+      # own WriteAppAsar in app_asar.go) whose sole file, index.js, does
+      # `require("/app/extra/discord/resources/vencord/patcher.js")`. Baked in at
+      # build time instead of constructed by apply_extra, since apply_extra can only
+      # use plain shell/coreutils and has no interpreter available to build an ASAR
+      # archive on the fly. Regenerate with the algorithm below if the target path
+      # (discord/resources/vencord/patcher.js relative to /app/extra) ever changes.
+      - type: inline
+        dest-filename: vencord-stub.asar
+        base64: true
+        contents: >-
+          BAAAAGAAAABcAAAAWAAAAHsiZmlsZXMiOnsiaW5kZXguanMiOnsic2l6ZSI6NTgsIm9mZnNldCI6IjAifSwicGFja2FnZS5qc29uIjp7InNpemUiOjQzLCJvZmZzZXQiOiI1OCJ9fX1yZXF1aXJlKCIvYXBwL2V4dHJhL2Rpc2NvcmQvcmVzb3VyY2VzL3ZlbmNvcmQvcGF0Y2hlci5qcyIpewoJIm5hbWUiOiAiZGlzY29yZCIsCgkibWFpbiI6ICJpbmRleC5qcyIKfQ==
+      # Flathub's own com.discordapp.Discord.svg (github.com/flathub/com.discordapp.Discord),
+      # used the same way Flathub uses it: Discord's own tarball ships no icon.
+      - type: inline
+        dest-filename: icon.svg
+        contents: |
+          <?xml version="1.0" encoding="UTF-8" standalone="no"?>
+          <!-- Created with Inkscape (http://www.inkscape.org/) -->
+          <svg
+             width="128.00002"
+             height="127.99999"
+             viewBox="0 0 33.866671 33.866665"
+             version="1.1"
+             id="svg1"
+             xmlns="http://www.w3.org/2000/svg"
+             xmlns:svg="http://www.w3.org/2000/svg"><defs
+               id="defs1"><style
+                 id="style1">.cls-1{fill:#e0e3ff;}</style></defs><g
+               id="layer1"
+               transform="translate(-32.279167,-138.64166)"><g
+                 id="g1"
+                 transform="matrix(0.4,0,0,0.4,-10.202805,47.397978)"><circle
+                   style="opacity:1;fill:#5865f2;fill-opacity:1;stroke-width:48.5099;stroke-linecap:square;stroke-linejoin:round;stroke-miterlimit:0;paint-order:stroke fill markers"
+                   id="path1"
+                   cx="148.53827"
+                   cy="270.44254"
+                   r="39.6875" /><path
+                   id="Discord-Symbol-Light_Blurple"
+                   class="cls-1"
+                   d="m 155.90857,250.59878 c -0.51164,0.90839 -0.97106,1.84811 -1.38869,2.80872 -3.96772,-0.59514 -8.00853,-0.59514 -11.98666,0 -0.40721,-0.96061 -0.87709,-1.90033 -1.38869,-2.80872 -3.72757,0.63693 -7.36116,1.75414 -10.80678,3.33078 -6.82865,10.11766 -8.67676,19.97424 -7.75792,29.69512 3.99901,2.95491 8.47837,5.21024 13.25005,6.65115 1.07545,-1.44091 2.02563,-2.97579 2.84005,-4.57328 -1.54533,-0.57429 -3.03845,-1.29474 -4.46889,-2.13004 0.37587,-0.27149 0.74133,-0.55339 1.09632,-0.82488 8.3844,3.94685 18.09486,3.94685 26.48967,0 0.355,0.29236 0.72046,0.57427 1.09633,0.82488 -1.43045,0.84572 -2.92356,1.55575 -4.47931,2.14049 0.81442,1.5975 1.76456,3.13237 2.84005,4.57328 4.77155,-1.44091 9.25087,-3.68581 13.25021,-6.64068 1.08562,-11.27665 -1.8587,-21.04975 -7.77916,-29.7056 -3.435,-1.57661 -7.0686,-2.69386 -10.79616,-3.32035 z m -16.06922,27.04306 c -2.57899,0 -4.71947,-2.33888 -4.71947,-5.23112 0,-2.8922 2.05693,-5.24154 4.70905,-5.24154 2.65212,0 4.76122,2.35976 4.71947,5.24154 -0.0417,2.88181 -2.07781,5.23112 -4.70905,5.23112 z m 17.39528,0 c -2.58949,0 -4.70905,-2.33888 -4.70905,-5.23112 0,-2.8922 2.05693,-5.24154 4.70905,-5.24154 2.65212,0 4.7508,2.35976 4.709,5.24154 -0.0418,2.88181 -2.0778,5.23112 -4.709,5.23112 z"
+                   style="stroke-width:0.413411" /></g></g></svg>
+      - type: inline
+        dest-filename: discord-development.desktop
+        contents: |
+          [Desktop Entry]
+          Name=Discord Development
+          GenericName=Internet Messenger
+          Comment=All-in-one voice and text chat for gamers (Development branch)
+          Exec=discord-development %U
+          Icon=com.discord.DiscordDevelopment
+          Type=Application
+          Categories=Network;InstantMessaging;
+          MimeType=x-scheme-handler/discord;
+          Terminal=false
+          StartupWMClass=discord-development
