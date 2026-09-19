@@ -17,7 +17,7 @@ id: com.discord.DiscordDevelopment
 runtime: org.freedesktop.Platform
 runtime-version: "25.08"
 sdk: org.freedesktop.Sdk
-base: org.chromium.Chromium.BaseApp
+base: org.electronjs.Electron2.BaseApp
 base-version: "25.08"
 command: discord-development
 
@@ -34,20 +34,10 @@ finish-args:
   - --talk-name=org.freedesktop.secrets
 
 modules:
-  # org.chromium.Chromium.BaseApp does not bundle zypak itself (unlike
-  # org.electronjs.Electron2.BaseApp) -- every consumer builds it in as its
-  # own module. Confirmed against the real, currently-published Chromium and
-  # Brave Flathub manifests, both of which use this exact module block.
-  # zypak-wrapper (below) is the officially documented bare usage of zypak
-  # (see github.com/refi64/zypak#basic-usage); it only needs this module
-  # present, not the Electron BaseApp or Cobalt.
-  - name: zypak
-    sources:
-      - type: git
-        url: https://github.com/refi64/zypak
-        tag: v2025.09
-        commit: 693a71c5ffa80ec9c9ce2ae03b1ccc493c698e53
-
+  # org.electronjs.Electron2.BaseApp bundles zypak itself (unlike
+  # org.chromium.Chromium.BaseApp), so zypak-wrapper (below) -- the officially
+  # documented bare usage of zypak, see github.com/refi64/zypak#basic-usage --
+  # is already on PATH without a module of our own for it.
   - name: discord
     buildsystem: simple
     build-commands:

@@ -4,7 +4,7 @@ id: com.openinterpreter.Interpreter
 runtime: org.freedesktop.Platform
 runtime-version: "25.08"
 sdk: org.freedesktop.Sdk
-base: org.chromium.Chromium.BaseApp
+base: org.electronjs.Electron2.BaseApp
 base-version: "25.08"
 command: interpreter
 
@@ -38,23 +38,11 @@ modules:
         tag: 4.6.1
         commit: d8cb82d9840330f9344ec37b992595b5d7b44184
 
-  # org.chromium.Chromium.BaseApp does not bundle zypak itself (unlike
-  # org.electronjs.Electron2.BaseApp) -- every consumer builds it in as its
-  # own module. Confirmed against the real, currently-published Chromium and
-  # Brave Flathub manifests, both of which use this exact module block.
-  - name: zypak
-    sources:
-      - type: git
-        url: https://github.com/refi64/zypak
-        tag: v2025.09
-        commit: 693a71c5ffa80ec9c9ce2ae03b1ccc493c698e53
-
   - name: interpreter
     buildsystem: simple
     build-commands:
       - install -Dm755 apply_extra -t /app/bin
       - install -Dm755 interpreter.sh /app/bin/interpreter
-      - install -Dm644 -t /app/etc cobalt.ini
       - chmod +x interpreter.AppImage
       - ./interpreter.AppImage --appimage-extract
       # Copy resources
@@ -69,15 +57,6 @@ modules:
       - type: file
         path: source.AppImage
         dest-filename: interpreter.AppImage
-      # cobalt (see below) has no default that matches our /app/extra/<name>/<bin>
-      # layout, so EntryPoint/WrapperScript are given explicitly.
-      - type: inline
-        dest-filename: cobalt.ini
-        contents: |
-          [Application]
-          Name=interpreter
-          EntryPoint=/app/extra/interpreter/interpreter
-          WrapperScript=/app/bin/interpreter
       # The real AppImage is never embedded in the build: flatpak downloads it straight
       # to the end user's machine at install time (see apply_extra below), verified
       # against this sha256/size.
@@ -120,4 +99,4 @@ modules:
         commands:
           - export TMPDIR="${XDG_RUNTIME_DIR}/app/${FLATPAK_ID}"
           - export LD_LIBRARY_PATH="/app/extra/interpreter/usr/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
-          - exec cobalt "$@"
+          - exec zypak-wrapper /app/extra/interpreter/interpreter "$@"
