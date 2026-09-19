@@ -1,17 +1,28 @@
 # $schema: https://raw.githubusercontent.com/flatpak/flatpak-builder/main/data/flatpak-manifest.schema.json
 #
-# Vencord + OpenAsar injection: neither is fetched at build time and neither is fetched
-# by running the real VencordInstallerCli at install time, because `apply_extra` (see
-# below) runs on the end user's machine with NO network access at all -- flatpak only
-# lets a manifest declare fixed, hash-verified `extra-data` downloads. So the exact
-# files the real Vencord installer would download (patcher.js/preload.js/renderer.js/
-# renderer.css from Vendicated/Vencord's latest release, and OpenAsar's nightly
-# app.asar) are each declared below as their own extra-data source, and `apply_extra`
-# places them by hand the same way `VencordInstallerCli -install -install-openasar`
-# would: OpenAsar's app.asar becomes the new "original" app, and a tiny stub app.asar
-# (pre-built below, see vencord-stub.asar) replaces Discord's real app.asar to
-# `require()` Vencord's patcher.js, which in turn loads `_app.asar` (OpenAsar) to
-# actually boot Discord.
+# Discord's own "linux tar.gz" download for this channel is NOT the full app: it's a
+# tiny (~2MB) self-bootstrapping installer (discord-development/updater_bootstrap
+# inside it) whose own launcher script downloads the real Electron app into
+# $XDG_CONFIG_HOME/discorddevelopment on first run. So there is no resources/app.asar
+# to patch until the app has actually been bootstrapped at runtime -- apply_extra
+# (install time, one-shot) can't touch it. discord.sh below reimplements Discord's own
+# bootstrap script (same $DIR/$EXE/$CHANNEL/$DOWNLOAD contract) and re-checks the
+# Vencord/OpenAsar patch on every launch instead, since Discord's own updater can also
+# replace resources/app.asar with a fresh, unpatched copy on a new version.
+#
+# Vencord + OpenAsar injection: neither is fetched by running the real
+# VencordInstallerCli, because that needs network access at a point (mid-launch, see
+# discord.sh) where making an inline install-time assumption about it is fragile; and
+# `apply_extra` (below) runs on the end user's machine with NO network access at all --
+# flatpak only lets a manifest declare fixed, hash-verified `extra-data` downloads. So
+# the exact files the real Vencord installer would download (patcher.js/preload.js/
+# renderer.js/renderer.css from Vendicated/Vencord's latest release, and OpenAsar's
+# nightly app.asar) are each declared below as their own extra-data source, staged by
+# apply_extra into a fixed /app/extra/discord path, and discord.sh places them by hand
+# the same way `VencordInstallerCli -install -install-openasar` would: OpenAsar's
+# app.asar becomes the new "original" app, and a tiny stub app.asar (pre-built below,
+# see vencord-stub.asar) replaces Discord's real app.asar to `require()` Vencord's
+# patcher.js, which in turn loads `_app.asar` (OpenAsar) to actually boot Discord.
 
 id: com.discord.DiscordDevelopment
 runtime: org.freedesktop.Platform
@@ -47,13 +58,15 @@ modules:
       - install -Dm644 icon.svg /app/share/icons/hicolor/scalable/apps/com.discord.DiscordDevelopment.svg
       - install -Dm644 discord-development.desktop /app/share/applications/com.discord.DiscordDevelopment.desktop
     sources:
-      # The real ~150MB Discord build is never embedded in the build: flatpak
-      # downloads it straight to the end user's machine at install time (see
-      # apply_extra below), verified against this sha256/size. No icon/desktop file
-      # is extracted from it at build time (unlike the AppImage-based packages in
-      # this repo) because Discord's official tarball does not ship one; the icon
-      # below is Flathub's own com.discordapp.Discord.svg, used the same way Flathub
-      # itself uses it (they don't extract one from the tarball either).
+      # This is Discord's small self-bootstrapping installer, not the ~150MB+ app
+      # itself (see the file layout comment at the top of this manifest) -- but it's
+      # still never embedded in the build: flatpak downloads it straight to the end
+      # user's machine at install time (see apply_extra below), verified against this
+      # sha256/size. No icon/desktop file is extracted from it at build time (unlike
+      # the AppImage-based packages in this repo); the icon below is Flathub's own
+      # com.discordapp.Discord.svg, used the same way Flathub itself uses it (the
+      # bundled discord.png in this tarball is used by Discord's own non-Flatpak
+      # installer instead).
       - type: extra-data
         filename: discord.tar.gz
         url: 'https://invalid.example/placeholder'
@@ -91,59 +104,71 @@ modules:
         size: 0
       # Runs at install time on the end user's machine, with cwd=/app/extra and no
       # network access. Every file referenced by name here is one of the extra-data
-      # downloads above.
+      # downloads above. All this does is stage updater_bootstrap and the Vencord/
+      # OpenAsar files at fixed paths -- there is no app.asar to patch yet (see the
+      # comment at the top of this manifest), so that part happens in discord.sh.
       - type: script
         dest-filename: apply_extra
         commands:
           - mkdir -p discord
           - tar xf discord.tar.gz -C discord --strip-components=1
           - rm -f discord.tar.gz
-          # Discord's tarball root has more than one executable file (the real
-          # Electron/ELF binary plus at least one shell-script launcher next to
-          # it), and which one `find` returns first isn't guaranteed. zypak
-          # refuses anything that isn't the real ELF (see
-          # github.com/refi64/zypak#basic-usage), so resolve it once here by
-          # ELF magic and pin it behind a fixed symlink, instead of having
-          # discord.sh re-guess (and potentially pick the script) on every launch.
-          - |
-            set -e
-            elf_magic=$(printf '\177ELF')
-            bin=""
-            for candidate in $(find discord -maxdepth 1 -type f -executable); do
-              if [ "$(head -c4 "$candidate")" = "$elf_magic" ]; then
-                bin="$candidate"
-                break
-              fi
-            done
-            if [ -z "$bin" ]; then
-              echo "apply_extra: could not locate Discord's ELF binary in discord.tar.gz" >&2
-              exit 1
-            fi
-            ln -sf "$(basename "$bin")" discord/discord-bin
+          - chmod +x discord/updater_bootstrap
           - mkdir -p discord/resources/vencord
           - mv vencord-patcher.js discord/resources/vencord/patcher.js
           - mv vencord-preload.js discord/resources/vencord/preload.js
           - mv vencord-renderer.js discord/resources/vencord/renderer.js
           - mv vencord-renderer.css discord/resources/vencord/renderer.css
-          # OpenAsar becomes the "original" app Vencord's stub loads via _app.asar,
-          # exactly as `VencordInstallerCli -install-openasar` followed by `-install`
-          # would leave it.
-          - mv discord/resources/app.asar discord/resources/app.asar.upstream
-          - mv openasar-app.asar discord/resources/_app.asar
-          - cp /app/share/vencord/stub.asar discord/resources/app.asar
+          - mv openasar-app.asar discord/openasar-app.asar
       - type: script
         dest-filename: discord.sh
         commands:
-          - export TMPDIR="${XDG_RUNTIME_DIR}/app/${FLATPAK_ID}"
-          - export LD_LIBRARY_PATH="/app/extra/discord${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
-          - exec zypak-wrapper /app/extra/discord/discord-bin "$@"
+          - |
+            export TMPDIR="${XDG_RUNTIME_DIR}/app/${FLATPAK_ID}"
+
+            # Same $DIR/$EXE/$CHANNEL/$DOWNLOAD contract as Discord's own bundled
+            # discord-development script (github.com/refi64/zypak isn't involved
+            # here -- updater_bootstrap is a plain downloader, not a Chromium
+            # process): bootstrap into $XDG_CONFIG_HOME on first run, same as
+            # Discord's official (non-Flatpak) package does.
+            config_home="${XDG_CONFIG_HOME:-$HOME/.config}"
+            app_root="$config_home/discorddevelopment"
+            host="$app_root/DiscordDevelopment"
+
+            if [ ! -x "$host" ]; then
+              mkdir -p "$app_root"
+              app_dir=$(/app/extra/discord/updater_bootstrap --no-zenity "$app_root" development https://updates.discord.com/) || {
+                echo "discord-development: bootstrap failed" >&2
+                exit 2
+              }
+              host="$app_root/$app_dir/DiscordDevelopment"
+            fi
+            # $host may be a symlink Discord's own updater repoints at whichever
+            # version directory is current; resolve it so resources/ below is the
+            # real, current version's.
+            real_host=$(readlink -f "$host")
+            resources="$(dirname "$real_host")/resources"
+
+            # Re-checked on every launch, not just once: Discord's own updater can
+            # replace resources/app.asar with a fresh, unpatched copy whenever it
+            # ships a new version, so app.asar.upstream's presence is what makes
+            # this idempotent rather than a one-time apply_extra step.
+            if [ -f "$resources/app.asar" ] && [ ! -f "$resources/app.asar.upstream" ]; then
+              mv "$resources/app.asar" "$resources/app.asar.upstream"
+              cp /app/extra/discord/openasar-app.asar "$resources/_app.asar"
+              cp /app/share/vencord/stub.asar "$resources/app.asar"
+            fi
+
+            export LD_LIBRARY_PATH="$(dirname "$real_host")${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+            exec zypak-wrapper "$real_host" "$@"
       # A tiny, fully deterministic ASAR archive (reimplementing Vencord/Installer's
       # own WriteAppAsar in app_asar.go) whose sole file, index.js, does
-      # `require("/app/extra/discord/resources/vencord/patcher.js")`. Baked in at
-      # build time instead of constructed by apply_extra, since apply_extra can only
-      # use plain shell/coreutils and has no interpreter available to build an ASAR
-      # archive on the fly. Regenerate with the algorithm below if the target path
-      # (discord/resources/vencord/patcher.js relative to /app/extra) ever changes.
+      # `require("/app/extra/discord/resources/vencord/patcher.js")` -- a fixed path
+      # apply_extra stages patcher.js at, independent of wherever Discord's own
+      # updater ends up putting the actual app (see discord.sh). Baked in at build
+      # time instead of constructed by apply_extra/discord.sh, since neither has an
+      # interpreter available to build an ASAR archive on the fly. Regenerate with the
+      # algorithm below if that path ever changes.
       - type: inline
         dest-filename: vencord-stub.asar
         base64: true
