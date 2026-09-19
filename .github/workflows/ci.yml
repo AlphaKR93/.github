@@ -19,6 +19,8 @@ on:
           - 'youtube-rvx_anddea-beta'
           - 'youtube_music-rvx_anddea-beta'
           - 'photomath'
+          - 'flatpak-thorium'
+          - 'flatpak-beeper'
 permissions:
   contents: write
 
@@ -29,6 +31,8 @@ jobs:
     outputs:
       rvx_anddea-beta: ${{ steps.rvx_anddea-beta.outputs.result }}
       devanced: ${{ steps.devanced.outputs.result }}
+      flatpak-thorium: ${{ steps.flatpak-thorium.outputs.result }}
+      flatpak-beeper: ${{ steps.flatpak-beeper.outputs.result }}
     steps:
       - uses: actions/checkout@v7
         if: github.event_name != 'workflow_dispatch' || inputs.to-patch == 'all'
@@ -59,7 +63,7 @@ jobs:
     needs: check
     if: needs.check.outputs.rvx_anddea-beta == 'true' || inputs.to-patch == 'youtube-rvx_anddea-beta'
     name: Patch YouTube (anddea/revanced-extended, beta)
-    uses: ./.github/workflows/.patch.yaml
+    uses: ./.github/workflows/.morphe-patch.yaml
     secrets: inherit
     with:
       name: 'youtube-rvx_anddea-beta'
@@ -73,7 +77,7 @@ jobs:
     needs: check
     if: needs.check.outputs.rvx_anddea-beta == 'true' || inputs.to-patch == 'youtube_music-rvx_anddea-beta'
     name: Patch YouTube Music (anddea/revanced-extended, beta)
-    uses: ./.github/workflows/.patch.yaml
+    uses: ./.github/workflows/.morphe-patch.yaml
     secrets: inherit
     with:
       name: 'youtube_music-rvx_anddea-beta'
@@ -89,7 +93,7 @@ jobs:
     needs: check
     if: needs.check.outputs.devanced == 'true' || inputs.to-patch == 'photomath'
     name: Patch Photomath (DeVanced)
-    uses: ./.github/workflows/.patch.yaml
+    uses: ./.github/workflows/.morphe-patch.yaml
     secrets: inherit
     with:
       name: 'photomath'
@@ -100,3 +104,12 @@ jobs:
       patcher-beta: true
       apkmirror: 'google-inc/photomath/photomath-{version}-release'
       unsafe-useLatestVersionFromSources: true
+
+  build-flatpak-thorium:
+    needs: check
+    if: needs.check.outputs.flatpak-thorium == 'true' || inputs.to-patch == 'flatpak-thorium'
+    name: Build Thorium
+    uses: ./.github/workflows/.thorium-build.yaml
+    secrets: inherit
+    with:
+      id: org.thorium.Thorium

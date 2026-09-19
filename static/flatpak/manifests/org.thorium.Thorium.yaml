@@ -1,0 +1,57 @@
+# $schema: https://raw.githubusercontent.com/flatpak/flatpak-builder/main/data/flatpak-manifest.schema.json
+
+id: org.thorium.Thorium
+runtime: org.freedesktop.Platform
+runtime-version: "26.08"
+sdk: org.freedesktop.Sdk
+base: org.chromium.Chromium.BaseApp
+base-version: "26.08"
+command: thorium
+
+separate-locales: false
+
+finish-args:
+  - --share=ipc
+  - --share=network
+  - --socket=x11
+  - --socket=wayland
+  - --socket=pulseaudio
+  - --socket=cups
+  - --device=dri
+  - --filesystem=xdg-download
+  - --talk-name=org.freedesktop.Notifications
+  - --talk-name=org.freedesktop.FileManager1
+  - --talk-name=org.freedesktop.ScreenSaver
+  - --talk-name=org.gnome.SessionManager
+  - --system-talk-name=org.freedesktop.UPower
+  - --own-name=org.mpris.MediaPlayer2.chromium.*
+  - --env=CHROME_WRAPPER=/app/thorium/bin/thorium
+
+modules:
+  - name: thorium
+    buildsystem: simple
+    build-commands:
+      - chmod +x thorium.AppImage
+      - ./thorium.AppImage --appimage-extract
+      # Install AppImage
+      - mkdir -p /app/thorium
+      - cp -a squashfs-root/usr/bin/. /app/thorium/
+      - install -Dm755 thorium.sh /app/bin/thorium
+      # Copy resources
+      - |
+        for icon in squashfs-root/usr/share/icons/hicolor/*/apps/thorium-browser.png; do
+          size=$(basename "$(dirname "$(dirname "$f")")");
+          install -Dm644 "$f" "/app/share/icons/hicolor/$size/apps/org.thorium.Thorium.png";
+        done
+      # Install desktop file
+      - install -Dm644 squashfs-root/thorium-browser.desktop /app/share/applications/org.thorium.Thorium.desktop
+      - desktop-file-edit --set-key=Exec --set-value="thorium %U" --set-icon=org.thorium.Thorium /app/share/applications/org.thorium.Thorium.desktop
+    sources:
+      - type: file
+        path: thorium.AppImage
+        dest-filename: thorium.AppImage
+      - type: script
+        dest-filename: thorium-browser.sh
+        commands:
+          - export TMPDIR="${XDG_RUNTIME_DIR}/app/${FLATPAK_ID}"
+          - exec zypak-wrapper /app/thorium/thorium "$@"

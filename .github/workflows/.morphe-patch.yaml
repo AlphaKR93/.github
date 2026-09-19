@@ -1,6 +1,6 @@
 # schema: https://www.schemastore.org/github-workflow.json
 
-name: Patch
+name: Patch Android Application
 env:
   JDK_FLAVOUR: zulu
   JDK_VERSION: 25

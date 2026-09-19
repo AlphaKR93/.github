@@ -1,0 +1,128 @@
+# $schema: https://www.schemastore.org/github-workflow.json
+
+name: Build Flatpak Package
+
+on:
+  workflow_call:
+    inputs:
+      id:
+        type: string
+        required: true
+        description: Application ID of the package
+
+      file-name:
+        type: string
+        required: true
+        description:
+          Regular expression rule of the downloaded file name
+      file-type:
+        type: string
+        required: true
+        description: |
+          Type of Package
+          One of: (AppImage)
+
+      download-uri:
+        type: string
+        required: true
+        description: Package download URI of the package
+      download-type:
+        type: string
+        required: true
+        description: |
+          Type of Download URI
+          One of: (direct, github)
+
+      download-type-github-prerelease:
+        type: boolean
+        required: false
+        default: false
+        description: Whether to use prerelease on GitHub Release
+
+    secrets:
+      OP_SERVICE_ACCOUNT_TOKEN:
+        required: true
+      OP_ENTRY_FLATPAK_BUILDER:
+        required: true
+
+jobs:
+  build:
+    name: Build Flatpak Package
+    runs-on: ubuntu-latest
+    container:
+      image: ghcr.io/flathub-infra/flatpak-github-actions:gnome-48
+      options: --privileged
+    steps:
+      - name: Retrieve secrets from 1Password
+        id: keystore
+        uses: 1password/load-secrets-action@v4
+        with:
+          export-env: false
+        env:
+          OP_SERVICE_ACCOUNT_TOKEN: ${{ secrets.OP_SERVICE_ACCOUNT_TOKEN }}
+          GH_PAT: ${{ secrets.OP_ENTRY_FLATPAK_BUILDER }}/credential
+          KS_GIT: ${{ secrets.OP_ENTRY_FLATPAK_BUILDER }}/keystroke/repository
+          KS_REF: ${{ secrets.OP_ENTRY_FLATPAK_BUILDER }}/keystroke/ref
+          FP_GIT: ${{ secrets.OP_ENTRY_FLATPAK_BUILDER }}/flatpak/repository
+          FP_REF: ${{ secrets.OP_ENTRY_FLATPAK_BUILDER }}/flatpak/ref
+
+      # Checkout repositories
+      - parallel:
+        - uses: actions/checkout@v7
+
+        - name: Checkout Flatpak repository
+          uses: actions/checkout@v7
+          with:
+            token: ${{ steps.keystore.outputs.GH_PAT }}
+            repository: ${{ steps.keystore.outputs.FP_GIT }}
+            ref: ${{ steps.keystore.outputs.FP_REF }}
+            path: repo
+            submodules: true
+            persist-credentials: false
+
+        - name: Checkout Keystrokes
+          uses: actions/checkout@v7
+          with:
+            token: ${{ steps.keystore.outputs.GH_PAT }}
+            repository: ${{ steps.keystore.outputs.KS_GIT }}
+            ref: ${{ steps.keystore.outputs.KS_REF }}
+            path: keys
+            submodules: true
+            persist-credentials: false
+
+      # Download packages
+      - parallel:
+        - id: download-github
+          if: inputs.download-type == 'github'
+          name: Download from GitHub
+          uses: ./.github/actions/gh-download-asset
+          with:
+            repository: ${{ inputs.download-uri }}
+            file: ${{ inputs.file-name }}
+            pre-release: ${{ inputs.download-type-github-prerelease }}
+            name: source.${{ inputs.package-type }}
+
+      - name: Build Flatpak bundle
+        uses: flatpak/flatpak-github-actions/flatpak-builder@v6
+        with:
+          manifest-path: static/flatpak/manifests/${{ inputs.id }}.yaml
+          repo-dir: repo
+          bundle: ${{ inputs.id }}.flatpak
+          artifact-name: ${{ inputs.id }}.flatpak
+          verbose: true
+
+      - name: Commit changes
+        run: |
+          cd repo
+          git add .
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git config user.name 'github-actions[bot]'
+          git commit --no-gpg-sign -m 'build: `${{ inputs.id }}`'
+
+      - name: Push Flatpak Repository
+        uses: ad-m/github-push-action@v1.3.0
+        with:
+          token: ${{ steps.keystore.outputs.GH_PAT }}
+          repository: ${{ steps.keystore.outputs.FP_GIT }}
+          branch: ${{ steps.keystore.outputs.FP_REF }}
+          directory: repo

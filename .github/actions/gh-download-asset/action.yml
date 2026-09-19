@@ -1,6 +1,7 @@
 # $schema: https://www.schemastore.org/github-action.json
 
 name: Download Asset from GitHub Release
+description: Download file asset from published GitHub Release.
 inputs:
   repository:
     description: Repository to download assets from
@@ -12,6 +13,10 @@ inputs:
     description: Path to download assets to
     required: true
     default: '.'
+  name:
+    description: Destination file name to download assets to
+    required: false
+    default: ''
   pre-release:
     description: Whether to accept pre-release assets
     required: false
@@ -31,7 +36,7 @@ runs:
         script: |
           const [owner, repo] = "${{ inputs.repository }}".split("/", 2);
           const prerelease = Boolean("${{ inputs.pre-release }}");
-          const fileExp = new RegExp(`^${{ inputs.file }}$`);
+          const fileExp = new RegExp('^${{ inputs.file }}$');
 
           const response = await github.rest.repos.listReleases({ owner, repo });
           core.info(`Found ${response.data.length} releases`);
@@ -47,7 +52,7 @@ runs:
 
           core.info(`Using latest release: ${release.name ?? release.tag_name} (${release.tag_name}): ${release.url}`);
           const fileResponse = await fetch(asset.browser_download_url);
-          const destPath = `${{ inputs.path }}/${asset.name}`;
+          const destPath = `${{ inputs.path }}/${"${{ inputs.name }}" ?? asset.name}`;
 
           core.info(`Writing file ${asset.name} to ${destPath}`);
           const { createWriteStream } = await import("node:fs");
