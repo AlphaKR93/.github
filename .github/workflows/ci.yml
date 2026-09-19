@@ -75,8 +75,8 @@ jobs:
       - name: Get current Flatpak version metadata
         id: flatpak
         run: |
-          echo 'config=${{ steps.keystore.outputs.FP_CFG }}' >> $GITHUB_OUTPUT
-          echo "current=$(cat dist/flatpak.json)" >> $GITHUB_OUTPUT
+          echo "config=$(echo '${{ steps.keystore.outputs.FP_CFG }}' | jq -c '.')" >> $GITHUB_OUTPUT
+          echo "current=$(cat dist/flatpak.json | jq -c '.')" >> $GITHUB_OUTPUT
           rm -f .fg-cfg
 
       - parallel:
