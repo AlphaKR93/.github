@@ -1,0 +1,36 @@
+# $schema: https://www.schemastore.org/github-action.json
+
+name: Get Latest Release Tag
+description: Get the tag name of the latest published GitHub Release.
+inputs:
+  repository:
+    description: Repository to look up the latest release of
+    required: true
+  pre-release:
+    description: Whether to accept pre-releases
+    required: false
+    default: 'false'
+outputs:
+  tag:
+    description: The tag name of the latest release
+    value: ${{ steps.run.outputs.result }}
+
+runs:
+  using: composite
+  steps:
+    - id: run
+      uses: actions/github-script@v9
+      with:
+        result-encoding: string
+        script: |
+          const [owner, repo] = "${{ inputs.repository }}".split("/", 2);
+          const prerelease = "${{ inputs.pre-release }}" === "true";
+
+          const response = await github.rest.repos.listReleases({ owner, repo });
+          core.info(`Found ${response.data.length} releases`);
+
+          const release = response.data.find(release => !release.draft && (!release.prerelease || prerelease));
+          if (!release) throw new Error("Could not find a release in ${{ inputs.repository }}");
+
+          core.info(`Using latest release: ${release.name ?? release.tag_name} (${release.tag_name}): ${release.url}`);
+          return release.tag_name;

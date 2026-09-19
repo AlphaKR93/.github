@@ -31,12 +31,9 @@ modules:
   - name: thorium
     buildsystem: simple
     build-commands:
+      - install -Dm755 apply_extra -t /app/bin
       - chmod +x thorium.AppImage
       - ./thorium.AppImage --appimage-extract
-      # Install AppImage
-      - mkdir -p /app/thorium
-      - cp -a squashfs-root/usr/bin/. /app/thorium/
-      - install -Dm755 thorium.sh /app/bin/thorium
       # Copy resources
       - |
         for icon in squashfs-root/usr/share/icons/hicolor/*/apps/thorium-browser.png; do
@@ -50,6 +47,18 @@ modules:
       - type: file
         path: source.AppImage
         dest-filename: thorium.AppImage
+      - type: extra-data
+        filename: thorium.AppImage
+        url: PLACEHOLDER
+        sha256: PLACEHOLDER
+        size: -1
+      - type: script
+        dest-filename: apply_extra
+        commands:
+          - chmod +x thorium.AppImage
+          - ./thorium.AppImage --appimage-extract
+          - mv squashfs-root/usr/bin thorium
+          - rm -rf squashfs-root thorium.AppImage
       - type: script
         dest-filename: thorium.sh
         commands:

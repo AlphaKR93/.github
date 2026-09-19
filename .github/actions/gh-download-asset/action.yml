@@ -25,6 +25,15 @@ outputs:
   file:
     description: The path to the downloaded asset
     value: ${{ steps.run.outputs.result }}
+  url:
+    description: Direct download URL of the selected release asset
+    value: ${{ steps.run.outputs.url }}
+  size:
+    description: Size of the selected release asset in bytes
+    value: ${{ steps.run.outputs.size }}
+  sha256:
+    description: SHA-256 digest of the selected release asset as a hex string without the `sha256:` prefix (empty if GitHub provides no digest for the asset)
+    value: ${{ steps.run.outputs.sha256 }}
 
 runs:
   using: composite
@@ -35,7 +44,7 @@ runs:
         result-encoding: string
         script: |
           const [owner, repo] = "${{ inputs.repository }}".split("/", 2);
-          const prerelease = Boolean("${{ inputs.pre-release }}");
+          const prerelease = "${{ inputs.pre-release }}" === "true";
           const fileExp = new RegExp('^${{ inputs.file }}$');
 
           const response = await github.rest.repos.listReleases({ owner, repo });
@@ -64,4 +73,7 @@ runs:
           await pipeline(Readable.fromWeb(fileResponse.body), createWriteStream(destPath));
 
           core.info(`Download complete!`);
+          core.setOutput("url", asset.browser_download_url);
+          core.setOutput("size", asset.size);
+          core.setOutput("sha256", (asset.digest ?? "").replace(/^sha256:/, ""));
           return destPath;

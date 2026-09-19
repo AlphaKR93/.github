@@ -1,4 +1,4 @@
-# schema: https://www.schemastore.org/github-workflow.json
+# $schema: https://www.schemastore.org/github-workflow.json
 
 name: Check updates
 on:
@@ -33,35 +33,98 @@ jobs:
     name: Check updates
     runs-on: ubuntu-slim
     outputs:
-      rvx_anddea-beta: ${{ steps.rvx_anddea-beta.outputs.result }}
-      devanced: ${{ steps.devanced.outputs.result }}
-      flatpak-thorium: ${{ steps.flatpak-thorium.outputs.result }}
-      flatpak-beeper: ${{ steps.flatpak-beeper.outputs.result }}
+      rvx-anddea-beta: ${{ steps.rvx-anddea-beta.outputs.result }}
+      rvx-devanced: ${{ steps.rvx-devanced.outputs.result }}
+      flatpak: ${{ fromJSON(steps.flatpak.outputs.current) }}
+      flatpak-thorium: ${{ fromJSON(steps.flatpak-thorium.outputs.result) }}
+      flatpak-beeper: ${{ fromJSON(steps.flatpak-beeper.outputs.result) }}
+      flatpak-openinterpreter: ${{ fromJSON(steps.flatpak-openinterpreter.outputs.result) }}
+      flatpak-thunderbird: ${{ fromJSON(steps.flatpak-thunderbird.outputs.result) }}
+      flatpak-discord-development: ${{ fromJSON(steps.flatpak-discord-development.outputs.result) }}
+      flatpak-claude: ${{ fromJSON(steps.flatpak-claude.outputs.result) }}
     steps:
       - uses: actions/checkout@v7
         if: github.event_name != 'workflow_dispatch' || inputs.to-patch == 'all'
       - uses: ./.github/actions/network
         if: github.event_name != 'workflow_dispatch' || inputs.to-patch == 'all'
 
+      - name: Retrieve secrets from 1Password
+        id: keystore
+        if: github.event_name != 'workflow_dispatch' || inputs.to-patch == 'all'
+        uses: 1password/load-secrets-action@v4
+        with:
+          export-env: false
+        env:
+          OP_SERVICE_ACCOUNT_TOKEN: ${{ secrets.OP_SERVICE_ACCOUNT_TOKEN }}
+          GH_PAT: ${{ secrets.OP_ENTRY_FLATPAK_BUILDER }}/credential
+          FP_GIT: ${{ secrets.OP_ENTRY_FLATPAK_BUILDER }}/flatpak/repository
+          FP_REF: ${{ secrets.OP_ENTRY_FLATPAK_BUILDER }}/flatpak/ref
+
+      - name: Checkout Flatpak Version Metadata
+        uses: actions/checkout@v7
+        with:
+          token: ${{ steps.keystore.outputs.GH_PAT }}
+          repository: ${{ steps.keystore.outputs.FP_GIT }}
+          ref: ${{ steps.keystore.outputs.FP_REF }}
+          persist-credentials: false
+          sprase-checkout: |
+            flatpak.json
+
+      - name: Get current Flatpak version metadata
+        id: flatpak
+        run: |
+          echo "current=$(cat flatpak.json)" >> $GITHUB_OUTPUT
+
       - parallel:
-          - id: rvx_anddea-beta
-            if: github.event_name != 'workflow_dispatch' || inputs.to-patch == 'all'
-            name: Check new patch RVX (Anddea)
-            uses: ./actions/check-updates
-            with:
-              repository: anddea/revanced-patches
-              release-file: 'youtube-rvx_anddea-beta.apk'
-              target-file: '^.*\.(jar|rvp|mpp)$'
-              pre-release: true
-          - id: devanced
-            if: github.event_name != 'workflow_dispatch' || inputs.to-patch == 'all'
-            name: Check new patch RVX (DeVanced)
-            uses: ./actions/check-updates
-            with:
-              repository: 'RookieEnough/De-Vanced'
-              release-file: 'photomath.apk'
-              target-file: '^.*\.(jar|rvp|mpp)$'
-              pre-release: true
+        - id: rvx-anddea-beta
+          if: github.event_name != 'workflow_dispatch' || inputs.to-patch == 'all'
+          name: Check new patch RVX (Anddea)
+          uses: ./actions/check-updates
+          with:
+            repository: anddea/revanced-patches
+            release-file: 'youtube-rvx_anddea-beta.apk'
+            target-file: '^.*\.(jar|rvp|mpp)$'
+            pre-release: true
+        - id: rvx-devanced
+          if: github.event_name != 'workflow_dispatch' || inputs.to-patch == 'all'
+          name: Check new patch RVX (DeVanced)
+          uses: ./actions/check-updates
+          with:
+            repository: 'RookieEnough/De-Vanced'
+            release-file: 'photomath.apk'
+            target-file: '^.*\.(jar|rvp|mpp)$'
+            pre-release: true
+        - id: flatpak-thorium
+          if: github.event_name != 'workflow_dispatch' || inputs.to-patch == 'all'
+          name: Check new release (Thorium)
+          uses: ./.github/actions/gh-release-tag
+          with:
+            repository: 'gz83/thorium'
+            pre-release: true
+        - id: flatpak-thunderbird
+          if: github.event_name != 'workflow_dispatch' || inputs.to-patch == 'all'
+          name: Check new release (Thunderbird)
+          run:
+            node scripts/flatpak/mozilla.mjs thunderbird beta linux amd64 en-US >> $GITHUB_OUTPUT
+        - id: flatpak-discord-development
+          if: github.event_name != 'workflow_dispatch' || inputs.to-patch == 'all'
+          name: Check new release (Discord Development)
+          run:
+            node scripts/flatpak/discord.mjs linux amd64 development >> $GITHUB_OUTPUT
+        - id: flatpak-beeper
+          if: github.event_name != 'workflow_dispatch' || inputs.to-patch == 'all'
+          name: Check new release (Beeper Nightly)
+          run:
+            node scripts/flatpak/electron.mjs \
+              'https://api.beeper.com/desktop/update-feed/latest-linux.yml?bundleId=com.automattic.beeper.desktop.nightly&platform=linux&arch=x64&channel=nightly' \
+              'https://api.beeper.com/desktop/download/linux/x64/nightly/com.automattic.beeper.desktop' >> $GITHUB_OUTPUT
+        - id: flatpak-openinterpreter
+          if: github.event_name != 'workflow_dispatch' || inputs.to-patch == 'all'
+          name: Check new release (OpenInterpreter Desktop)
+          run:
+            node scripts/flatpak/electron.mjs \
+              'https://auth.openinterpreter.com/storage/v1/object/public/workstationupdater/releases/latest-linux.yml' \
+              'https://openinterpreter.com/download/linux/appimage' >> $GITHUB_OUTPUT
 
   patch-youtube-rvx_anddea-beta:
     needs: check
@@ -111,7 +174,7 @@ jobs:
 
   build-flatpak-thorium:
     needs: check
-    if: needs.check.outputs.flatpak-thorium == 'true' || inputs.to-patch == 'flatpak-thorium'
+    if: inputs.to-patch == 'flatpak-thorium' || needs.check.outputs.flatpak-thorium.fingerprint != needs.check.outputs.flatpak.thorium
     name: Build Thorium
     uses: ./.github/workflows/.flatpak-build.yaml
     secrets: inherit
