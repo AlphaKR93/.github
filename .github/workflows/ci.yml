@@ -132,7 +132,7 @@ jobs:
               '${{ fromJSON(steps.flatpak.outputs.config).interpreter.electron }}' \
               '${{ fromJSON(steps.flatpak.outputs.config).interpreter.fallback }}' >> $GITHUB_OUTPUT
       - run: |
-          echo '${{ fromJSON(steps.flatpak.outputs.current) }}' 
+          echo '${{ steps.flatpak.outputs.current }}' 
 
   patch-youtube-rvx_anddea-beta:
     needs: check
