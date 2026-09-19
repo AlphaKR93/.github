@@ -2,10 +2,10 @@
 
 id: com.beeper.Beeper
 runtime: org.freedesktop.Platform
-runtime-version: "26.08"
+runtime-version: "25.08"
 sdk: org.freedesktop.Sdk
 base: org.chromium.Chromium.BaseApp
-base-version: "26.08"
+base-version: "25.08"
 command: beepertexts
 
 finish-args:
