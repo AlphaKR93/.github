@@ -53,6 +53,8 @@ jobs:
       image: ghcr.io/flathub-infra/flatpak-github-actions:gnome-48
       options: --privileged
     steps:
+      - uses: actions/checkout@v7
+
       - name: Retrieve secrets from 1Password
         id: keystore
         uses: 1password/load-secrets-action@v4
@@ -66,29 +68,25 @@ jobs:
           FP_GIT: ${{ secrets.OP_ENTRY_FLATPAK_BUILDER }}/flatpak/repository
           FP_REF: ${{ secrets.OP_ENTRY_FLATPAK_BUILDER }}/flatpak/ref
 
-      # Checkout repositories
-      - parallel:
-        - uses: actions/checkout@v7
+      - name: Checkout Flatpak repository
+        uses: actions/checkout@v7
+        with:
+          token: ${{ steps.keystore.outputs.GH_PAT }}
+          repository: ${{ steps.keystore.outputs.FP_GIT }}
+          ref: ${{ steps.keystore.outputs.FP_REF }}
+          path: repo
+          submodules: true
+          persist-credentials: false
 
-        - name: Checkout Flatpak repository
-          uses: actions/checkout@v7
-          with:
-            token: ${{ steps.keystore.outputs.GH_PAT }}
-            repository: ${{ steps.keystore.outputs.FP_GIT }}
-            ref: ${{ steps.keystore.outputs.FP_REF }}
-            path: repo
-            submodules: true
-            persist-credentials: false
-
-        - name: Checkout Keystrokes
-          uses: actions/checkout@v7
-          with:
-            token: ${{ steps.keystore.outputs.GH_PAT }}
-            repository: ${{ steps.keystore.outputs.KS_GIT }}
-            ref: ${{ steps.keystore.outputs.KS_REF }}
-            path: keys
-            submodules: true
-            persist-credentials: false
+      - name: Checkout Keystrokes
+        uses: actions/checkout@v7
+        with:
+          token: ${{ steps.keystore.outputs.GH_PAT }}
+          repository: ${{ steps.keystore.outputs.KS_GIT }}
+          ref: ${{ steps.keystore.outputs.KS_REF }}
+          path: keys
+          submodules: true
+          persist-credentials: false
 
       # Download packages
       - parallel:
