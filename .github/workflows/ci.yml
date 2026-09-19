@@ -120,15 +120,15 @@ jobs:
           name: Check new release (Beeper Nightly)
           run:
             node scripts/flatpak/electron.mjs \
-              '${{ steps.flatpak.outputs.config.beeper.electron }}' \
-              '${{ steps.flatpak.outputs.config.beeper.fallback }}' >> $GITHUB_OUTPUT
+              '${{ fromJSON(steps.flatpak.outputs.config).beeper.electron }}' \
+              '${{ fromJSON(steps.flatpak.outputs.config).beeper.fallback }}' >> $GITHUB_OUTPUT
         - id: flatpak-openinterpreter
           if: github.event_name != 'workflow_dispatch' || inputs.to-patch == 'all'
           name: Check new release (OpenInterpreter Desktop)
           run:
             node scripts/flatpak/electron.mjs \
-              '${{ steps.flatpak.outputs.config.interpreter.electron }}' \
-              '${{ steps.flatpak.outputs.config.interpreter.fallback }}' >> $GITHUB_OUTPUT
+              '${{ fromJSON(steps.flatpak.outputs.config).interpreter.electron }}' \
+              '${{ fromJSON(steps.flatpak.outputs.config).interpreter.fallback }}' >> $GITHUB_OUTPUT
 
   patch-youtube-rvx_anddea-beta:
     needs: check
