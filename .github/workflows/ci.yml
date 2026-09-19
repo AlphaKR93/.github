@@ -58,7 +58,6 @@ jobs:
           OP_SERVICE_ACCOUNT_TOKEN: ${{ secrets.OP_SERVICE_ACCOUNT_TOKEN }}
           FP_GIT: ${{ secrets.OP_ENTRY_FLATPAK_BUILDER }}/flatpak/repository
           FP_REF: ${{ secrets.OP_ENTRY_FLATPAK_BUILDER }}/flatpak/ref
-          FP_CFG: ${{ secrets.OP_ENTRY_FLATPAK_GENERIC }}
           GH_PAT: ${{ secrets.OP_ENTRY_FLATPAK_GENERIC }}/credential
 
       - name: Checkout Flatpak Version Metadata
@@ -77,9 +76,7 @@ jobs:
         if: github.event_name != 'workflow_dispatch' || inputs.to-patch == 'all'
         id: flatpak
         run: |
-          echo "config=$(echo '${{ steps.keystore.outputs.FP_CFG }}' | jq -c '.')" >> $GITHUB_OUTPUT
           echo "current=$(cat dist/flatpak.json | jq -c '.')" >> $GITHUB_OUTPUT
-          rm -f .fg-cfg
 
       - parallel:
         - id: rvx-anddea-beta
@@ -122,15 +119,15 @@ jobs:
           name: Check new release (Beeper Nightly)
           run:
             node scripts/flatpak/electron.mjs \
-              '${{ fromJSON(steps.flatpak.outputs.config).beeper.electron }}' \
-              '${{ fromJSON(steps.flatpak.outputs.config).beeper.fallback }}' >> $GITHUB_OUTPUT
+              'https://api.beeper.com/desktop/update-feed/latest-linux.yml?bundleId=com.automattic.beeper.desktop.nightly&platform=linux&arch=x64&channel=nightly' \
+              'https://api.beeper.com/desktop/download/linux/x64/nightly/com.automattic.beeper.desktop' >> $GITHUB_OUTPUT
         - id: flatpak-openinterpreter
           if: github.event_name != 'workflow_dispatch' || inputs.to-patch == 'all'
           name: Check new release (OpenInterpreter Desktop)
           run:
             node scripts/flatpak/electron.mjs \
-              '${{ fromJSON(steps.flatpak.outputs.config).interpreter.electron }}' \
-              '${{ fromJSON(steps.flatpak.outputs.config).interpreter.fallback }}' >> $GITHUB_OUTPUT
+              'https://auth.openinterpreter.com/storage/v1/object/public/workstationupdater/releases/latest-linux.yml' \
+              'https://openinterpreter.com/download/linux/appimage' >> $GITHUB_OUTPUT
       - run: |
           echo '${{ steps.flatpak.outputs.current }}' 
 
