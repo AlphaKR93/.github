@@ -48,7 +48,7 @@ modules:
       - desktop-file-edit --set-key=Exec --set-value="thorium %U" --set-icon=org.thorium.Thorium /app/share/applications/org.thorium.Thorium.desktop
     sources:
       - type: file
-        path: source.AppImage
+        path: dist/source.AppImage
         dest-filename: thorium.AppImage
       - type: script
         dest-filename: thorium.sh
