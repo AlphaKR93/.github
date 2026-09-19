@@ -45,8 +45,15 @@ modules:
       - install -Dm755 interpreter.sh /app/bin/interpreter
       - chmod +x interpreter.AppImage
       - ./interpreter.AppImage --appimage-extract
-      # Copy resources
-      - install -Dm644 squashfs-root/usr/share/icons/hicolor/1024x1024/apps/interpreter.png /app/share/icons/hicolor/1024x1024/apps/com.openinterpreter.Interpreter.png
+      # Copy resources. Flathub caps hicolor icons at 512x512, but electron-
+      # builder's Linux target ships larger sizes too (e.g. 1024x1024) --
+      # install whichever sizes are actually <=512 and skip the rest.
+      - |
+        for icon in squashfs-root/usr/share/icons/hicolor/*/apps/interpreter.png; do
+          size=$(basename "$(dirname "$(dirname "$icon")")")
+          [ "${size%%x*}" -le 512 ] || continue
+          install -Dm644 "$icon" "/app/share/icons/hicolor/$size/apps/com.openinterpreter.Interpreter.png"
+        done
       # Install desktop file
       - install -Dm644 squashfs-root/interpreter.desktop /app/share/applications/com.openinterpreter.Interpreter.desktop
       - desktop-file-edit --set-key=Exec --set-value='interpreter %U' --set-icon=com.openinterpreter.Interpreter /app/share/applications/com.openinterpreter.Interpreter.desktop

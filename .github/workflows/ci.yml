@@ -43,14 +43,16 @@ jobs:
       flatpak-discord-development: ${{ steps.flatpak-discord-development.outputs.result }}
       flatpak-claude: ${{ steps.flatpak-claude.outputs.result }}
     steps:
+      # Always run regardless of `to-patch`: the individual check steps below
+      # each need these (checkout, secrets, flatpak.json), and gating them on
+      # `to-patch == 'all'` left a targeted dispatch (e.g. `flatpak-beeper`)
+      # with no checkout/secrets at all, in addition to the `fromJSON` issue
+      # documented below.
       - uses: actions/checkout@v7
-        if: github.event_name != 'workflow_dispatch' || inputs.to-patch == 'all'
       - uses: ./.github/actions/network
-        if: github.event_name != 'workflow_dispatch' || inputs.to-patch == 'all'
 
       - name: Retrieve secrets from 1Password
         id: keystore
-        if: github.event_name != 'workflow_dispatch' || inputs.to-patch == 'all'
         uses: 1password/load-secrets-action@v4
         with:
           export-env: false
@@ -61,7 +63,6 @@ jobs:
           GH_PAT: ${{ secrets.OP_ENTRY_FLATPAK_GENERIC }}/credential
 
       - name: Checkout Flatpak Version Metadata
-        if: github.event_name != 'workflow_dispatch' || inputs.to-patch == 'all'
         uses: actions/checkout@v7
         with:
           token: ${{ steps.keystore.outputs.GH_PAT }}
@@ -73,14 +74,15 @@ jobs:
             flatpak.json
 
       - name: Get current Flatpak version metadata
-        if: github.event_name != 'workflow_dispatch' || inputs.to-patch == 'all'
         id: flatpak
         run: |
           echo "current=$(cat dist/flatpak.json | jq -c '.')" >> $GITHUB_OUTPUT
 
       - parallel:
         - id: rvx-anddea-beta
-          if: github.event_name != 'workflow_dispatch' || inputs.to-patch == 'all'
+          if: >-
+            github.event_name != 'workflow_dispatch' || inputs.to-patch == 'all' ||
+            inputs.to-patch == 'youtube-rvx_anddea-beta' || inputs.to-patch == 'youtube_music-rvx_anddea-beta'
           name: Check new patch RVX (Anddea)
           uses: ./actions/check-updates
           with:
@@ -89,7 +91,7 @@ jobs:
             target-file: '^.*\.(jar|rvp|mpp)$'
             pre-release: true
         - id: rvx-devanced
-          if: github.event_name != 'workflow_dispatch' || inputs.to-patch == 'all'
+          if: github.event_name != 'workflow_dispatch' || inputs.to-patch == 'all' || inputs.to-patch == 'photomath'
           name: Check new patch RVX (DeVanced)
           uses: ./actions/check-updates
           with:
@@ -98,31 +100,31 @@ jobs:
             target-file: '^.*\.(jar|rvp|mpp)$'
             pre-release: true
         - id: flatpak-thorium
-          if: github.event_name != 'workflow_dispatch' || inputs.to-patch == 'all'
+          if: github.event_name != 'workflow_dispatch' || inputs.to-patch == 'all' || inputs.to-patch == 'flatpak-thorium'
           name: Check new release (Thorium)
           uses: ./.github/actions/gh-release-tag
           with:
             repository: 'gz83/thorium'
             pre-release: true
         - id: flatpak-thunderbird
-          if: github.event_name != 'workflow_dispatch' || inputs.to-patch == 'all'
+          if: github.event_name != 'workflow_dispatch' || inputs.to-patch == 'all' || inputs.to-patch == 'flatpak-thunderbird-beta'
           name: Check new release (Thunderbird)
           run:
             node scripts/flatpak/mozilla.mjs thunderbird beta linux amd64 en-US >> $GITHUB_OUTPUT
         - id: flatpak-discord-development
-          if: github.event_name != 'workflow_dispatch' || inputs.to-patch == 'all'
+          if: github.event_name != 'workflow_dispatch' || inputs.to-patch == 'all' || inputs.to-patch == 'flatpak-discord-development'
           name: Check new release (Discord Development)
           run:
             node scripts/flatpak/discord.mjs linux amd64 development >> $GITHUB_OUTPUT
         - id: flatpak-beeper
-          if: github.event_name != 'workflow_dispatch' || inputs.to-patch == 'all'
+          if: github.event_name != 'workflow_dispatch' || inputs.to-patch == 'all' || inputs.to-patch == 'flatpak-beeper'
           name: Check new release (Beeper Nightly)
           run:
             node scripts/flatpak/electron.mjs \
               'https://api.beeper.com/desktop/update-feed/latest-linux.yml?bundleId=com.automattic.beeper.desktop.nightly&platform=linux&arch=x64&channel=nightly' \
               'https://api.beeper.com/desktop/download/linux/x64/nightly/com.automattic.beeper.desktop' >> $GITHUB_OUTPUT
         - id: flatpak-openinterpreter
-          if: github.event_name != 'workflow_dispatch' || inputs.to-patch == 'all'
+          if: github.event_name != 'workflow_dispatch' || inputs.to-patch == 'all' || inputs.to-patch == 'flatpak-interpreter'
           name: Check new release (OpenInterpreter Desktop)
           run:
             node scripts/flatpak/electron.mjs \
@@ -177,7 +179,9 @@ jobs:
 
   build-flatpak-thorium:
     needs: check
-    if: inputs.to-patch == 'flatpak-thorium' || needs.check.outputs.flatpak-thorium != fromJSON(needs.check.outputs.flatpak).thorium
+    if: >-
+      inputs.to-patch == 'flatpak-thorium' ||
+      needs.check.outputs.flatpak-thorium != fromJSON(needs.check.outputs.flatpak || '{}').thorium
     name: Build Thorium
     uses: ./.github/workflows/.flatpak-build.yaml
     secrets: inherit
@@ -190,65 +194,71 @@ jobs:
       download-type-github-prerelease: true
       main-extra-data-filename: thorium.AppImage
       check-key: thorium
-      check-value: ${{ needs.check.outputs.flatpak-thorium.tag }}
+      check-value: ${{ needs.check.outputs.flatpak-thorium }}
 
   build-flatpak-beeper:
     needs: check
-    if: inputs.to-patch == 'flatpak-beeper' || fromJSON(needs.check.outputs.flatpak-beeper).fingerprint != fromJSON(needs.check.outputs.flatpak).beeper
+    if: >-
+      inputs.to-patch == 'flatpak-beeper' ||
+      fromJSON(needs.check.outputs.flatpak-beeper || '{}').fingerprint != fromJSON(needs.check.outputs.flatpak || '{}').beeper
     name: Build Beeper (Nightly)
     uses: ./.github/workflows/.flatpak-build.yaml
     secrets: inherit
     with:
       id: com.beeper.Beeper
       file-type: AppImage
-      download-uri: ${{ fromJSON(needs.check.outputs.flatpak-beeper).download_uri }}
+      download-uri: ${{ fromJSON(needs.check.outputs.flatpak-beeper || '{}').download_uri }}
       download-type: direct
       main-extra-data-filename: beeper.AppImage
       check-key: beeper
-      check-value: ${{ fromJSON(needs.check.outputs.flatpak-beeper).fingerprint }}
+      check-value: ${{ fromJSON(needs.check.outputs.flatpak-beeper || '{}').fingerprint }}
 
   build-flatpak-openinterpreter:
     needs: check
-    if: inputs.to-patch == 'flatpak-interpreter' || fromJSON(needs.check.outputs.flatpak-openinterpreter).fingerprint != fromJSON(needs.check.outputs.flatpak).openinterpreter
+    if: >-
+      inputs.to-patch == 'flatpak-interpreter' ||
+      fromJSON(needs.check.outputs.flatpak-openinterpreter || '{}').fingerprint != fromJSON(needs.check.outputs.flatpak || '{}').openinterpreter
     name: Build OpenInterpreter Desktop
     uses: ./.github/workflows/.flatpak-build.yaml
     secrets: inherit
     with:
       id: com.openinterpreter.Interpreter
       file-type: AppImage
-      download-uri: ${{ fromJSON(needs.check.outputs.flatpak-openinterpreter).download_uri }}
+      download-uri: ${{ fromJSON(needs.check.outputs.flatpak-openinterpreter || '{}').download_uri }}
       download-type: direct
       main-extra-data-filename: interpreter.AppImage
       check-key: openinterpreter
-      check-value: ${{ fromJSON(needs.check.outputs.flatpak-openinterpreter).fingerprint }}
+      check-value: ${{ fromJSON(needs.check.outputs.flatpak-openinterpreter || '{}').fingerprint }}
 
   build-flatpak-thunderbird-beta:
     needs: check
-    if: inputs.to-patch == 'flatpak-thunderbird-beta' || fromJSON(needs.check.outputs.flatpak-thunderbird).fingerprint != fromJSON(needs.check.outputs.flatpak).thunderbird
+    if: >-
+      inputs.to-patch == 'flatpak-thunderbird-beta' ||
+      fromJSON(needs.check.outputs.flatpak-thunderbird || '{}').fingerprint != fromJSON(needs.check.outputs.flatpak || '{}').thunderbird
     name: Build Thunderbird (Beta)
     uses: ./.github/workflows/.flatpak-build.yaml
     secrets: inherit
     with:
       id: org.mozilla.ThunderbirdBeta
       file-type: tar.xz
-      download-uri: ${{ fromJSON(needs.check.outputs.flatpak-thunderbird).download_uri }}
+      download-uri: ${{ fromJSON(needs.check.outputs.flatpak-thunderbird || '{}').download_uri }}
       download-type: direct
       main-extra-data-filename: thunderbird.tar.xz
       check-key: thunderbird
-      check-value: ${{ fromJSON(needs.check.outputs.flatpak-thunderbird).fingerprint }}
+      check-value: ${{ fromJSON(needs.check.outputs.flatpak-thunderbird || '{}').fingerprint }}
 
   build-flatpak-discord-development:
     needs: check
     if: >-
       inputs.to-patch == 'flatpak-discord-development' ||
-      fromJSON(needs.check.outputs.flatpak-discord-development).fingerprint != fromJSON(needs.check.outputs.flatpak)['discord-development']
+      fromJSON(needs.check.outputs.flatpak-discord-development || '{}').fingerprint != fromJSON(needs.check.outputs.flatpak || '{}')['discord-development']
     name: Build Discord (Development)
     uses: ./.github/workflows/.flatpak-build.yaml
     secrets: inherit
     with:
       id: com.discord.DiscordDevelopment
       file-type: tar.gz
-      download-uri: ${{ fromJSON(needs.check.outputs.flatpak-discord-development).download_uri }}
+      download-uri: ${{ fromJSON(needs.check.outputs.flatpak-discord-development || '{}').download_uri }}
       download-type: direct
       main-extra-data-filename: discord.tar.gz
       # The exact 4 Vencord bundle files (and only those 4) that `VencordInstallerCli
@@ -263,4 +273,4 @@ jobs:
           {"filename": "openasar-app.asar", "url": "https://github.com/GooseMod/OpenAsar/releases/download/nightly/app.asar"}
         ]
       check-key: discord-development
-      check-value: ${{ fromJSON(needs.check.outputs.flatpak-discord-development).fingerprint }}
+      check-value: ${{ fromJSON(needs.check.outputs.flatpak-discord-development || '{}').fingerprint }}
