@@ -102,6 +102,10 @@ jobs:
             path: dist
             name: source.${{ inputs.file-type }}
 
+      - run: |
+          ls -A .
+          ls -A dist
+
       - name: Build Flatpak bundle
         uses: flatpak/flatpak-github-actions/flatpak-builder@v6
         with:

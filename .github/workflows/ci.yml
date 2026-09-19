@@ -21,6 +21,10 @@ on:
           - 'photomath'
           - 'flatpak-thorium'
           - 'flatpak-beeper'
+          - 'flatpak-interpreter'
+          - 'flatpak-thunderbird-beta'
+          - 'flatpak-discord-development'
+          - 'flatpak-claude'
 permissions:
   contents: write
 

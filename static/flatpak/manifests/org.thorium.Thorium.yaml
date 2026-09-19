@@ -51,7 +51,7 @@ modules:
         path: source.AppImage
         dest-filename: thorium.AppImage
       - type: script
-        dest-filename: thorium-browser.sh
+        dest-filename: thorium.sh
         commands:
           - export TMPDIR="${XDG_RUNTIME_DIR}/app/${FLATPAK_ID}"
           - exec zypak-wrapper /app/thorium/thorium "$@"
