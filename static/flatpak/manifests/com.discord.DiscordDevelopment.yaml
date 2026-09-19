@@ -98,6 +98,28 @@ modules:
           - mkdir -p discord
           - tar xf discord.tar.gz -C discord --strip-components=1
           - rm -f discord.tar.gz
+          # Discord's tarball root has more than one executable file (the real
+          # Electron/ELF binary plus at least one shell-script launcher next to
+          # it), and which one `find` returns first isn't guaranteed. zypak
+          # refuses anything that isn't the real ELF (see
+          # github.com/refi64/zypak#basic-usage), so resolve it once here by
+          # ELF magic and pin it behind a fixed symlink, instead of having
+          # discord.sh re-guess (and potentially pick the script) on every launch.
+          - |
+            set -e
+            elf_magic=$(printf '\177ELF')
+            bin=""
+            for candidate in $(find discord -maxdepth 1 -type f -executable); do
+              if [ "$(head -c4 "$candidate")" = "$elf_magic" ]; then
+                bin="$candidate"
+                break
+              fi
+            done
+            if [ -z "$bin" ]; then
+              echo "apply_extra: could not locate Discord's ELF binary in discord.tar.gz" >&2
+              exit 1
+            fi
+            ln -sf "$(basename "$bin")" discord/discord-bin
           - mkdir -p discord/resources/vencord
           - mv vencord-patcher.js discord/resources/vencord/patcher.js
           - mv vencord-preload.js discord/resources/vencord/preload.js
@@ -114,7 +136,7 @@ modules:
         commands:
           - export TMPDIR="${XDG_RUNTIME_DIR}/app/${FLATPAK_ID}"
           - export LD_LIBRARY_PATH="/app/extra/discord${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
-          - exec zypak-wrapper "$(find /app/extra/discord -maxdepth 1 -type f -executable -print -quit)" "$@"
+          - exec zypak-wrapper /app/extra/discord/discord-bin "$@"
       # A tiny, fully deterministic ASAR archive (reimplementing Vencord/Installer's
       # own WriteAppAsar in app_asar.go) whose sole file, index.js, does
       # `require("/app/extra/discord/resources/vencord/patcher.js")`. Baked in at
