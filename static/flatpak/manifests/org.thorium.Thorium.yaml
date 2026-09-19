@@ -49,8 +49,8 @@ modules:
         dest-filename: thorium.AppImage
       - type: extra-data
         filename: thorium.AppImage
-        url: PLACEHOLDER
-        sha256: PLACEHOLDER
+        url: '<PLACEHOLDER>'
+        sha256: '<PLACEHOLDER>'
         size: -1
       - type: script
         dest-filename: apply_extra

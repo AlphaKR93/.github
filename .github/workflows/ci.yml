@@ -178,7 +178,7 @@ jobs:
 
   build-flatpak-thorium:
     needs: check
-    if: inputs.to-patch == 'flatpak-thorium' || fromJSON(needs.check.outputs.flatpak-thorium).fingerprint != fromJSON(needs.check.outputs.flatpak).thorium
+    if: inputs.to-patch == 'flatpak-thorium' || needs.check.outputs.flatpak-thorium.tag != fromJSON(needs.check.outputs.flatpak).thorium
     name: Build Thorium
     uses: ./.github/workflows/.flatpak-build.yaml
     secrets: inherit
