@@ -67,8 +67,7 @@ on:
         required: true
         description: |
           Short package key (e.g. "thorium", "beeper", "discord-development"), used as
-          the lookup key in dist/flatpak.json (see ci.yml's `check` job) and, for
-          `download-type: direct` packages, in repo/flatpak.yaml.
+          the lookup key in dist/flatpak.json (see ci.yml's `check` job).
       check-value:
         type: string
         required: true
@@ -245,30 +244,13 @@ jobs:
               f.write("\n")
           PY
 
-      # repo/flatpak.yaml is the fingerprint index the GitHub Pages front-end reads.
-      # download-type: github packages (currently just Thorium) are tracked by
-      # release tag in flatpak.json above instead, so they're skipped here.
-      - name: Update Flatpak repository fingerprint index
-        if: inputs.download-type == 'direct'
-        env:
-          CHECK_KEY: ${{ inputs.check-key }}
-          CHECK_VALUE: ${{ inputs.check-value }}
-        run: |
-          set -eu
-          file="repo/flatpak.yaml"
-          touch "$file"
-          grep -v "^${CHECK_KEY}:" "$file" > "${file}.tmp" || true
-          mv "${file}.tmp" "$file"
-          escaped=$(printf '%s' "$CHECK_VALUE" | sed "s/'/''/g")
-          printf "%s: '%s'\n" "$CHECK_KEY" "$escaped" >> "$file"
-
       # All 5 packages build in parallel and push to the same Flatpak repo, so a
       # later push here routinely loses the race to another job's push that
       # landed first. Rather than serializing the (expensive) builds themselves,
       # retry just this cheap tail: pull the winner's changes in and push again.
       # Ref/object files never overlap between jobs (each owns a different
-      # app id / content-addressed objects) and flatpak.json/flatpak.yaml are
-      # upserts of independent keys, so a normal merge handles almost
+      # app id / content-addressed objects) and flatpak.json is an upsert of
+      # independent keys, so a normal merge handles almost
       # everything; `-X ours` is only a last-resort tiebreaker for the rare
       # adjacent-line conflict. The OSTree summary is a generated binary index
       # over every branch in the repo, which a merge can't meaningfully combine,
