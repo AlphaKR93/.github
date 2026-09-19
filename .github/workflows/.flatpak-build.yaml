@@ -262,18 +262,61 @@ jobs:
           escaped=$(printf '%s' "$CHECK_VALUE" | sed "s/'/''/g")
           printf "%s: '%s'\n" "$CHECK_KEY" "$escaped" >> "$file"
 
-      - name: Commit changes
+      # All 5 packages build in parallel and push to the same Flatpak repo, so a
+      # later push here routinely loses the race to another job's push that
+      # landed first. Rather than serializing the (expensive) builds themselves,
+      # retry just this cheap tail: pull the winner's changes in and push again.
+      # Ref/object files never overlap between jobs (each owns a different
+      # app id / content-addressed objects) and flatpak.json/flatpak.yaml are
+      # upserts of independent keys, so a normal merge handles almost
+      # everything; `-X ours` is only a last-resort tiebreaker for the rare
+      # adjacent-line conflict. The OSTree summary is a generated binary index
+      # over every branch in the repo, which a merge can't meaningfully combine,
+      # so it's always regenerated from the post-merge ref state instead of
+      # trusting whatever the merge produced for it.
+      - name: Commit and push Flatpak repository
+        env:
+          GH_PAT: ${{ steps.keystore.outputs.GH_PAT }}
+          FP_GIT: ${{ steps.keystore.outputs.FP_GIT }}
+          FP_REF: ${{ steps.keystore.outputs.FP_REF }}
+          PKG_ID: ${{ inputs.id }}
         run: |
+          set -eu
           cd repo
-          git add .
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git config user.name 'github-actions[bot]'
-          git commit --no-gpg-sign -m 'build: `${{ inputs.id }}`'
+          remote="https://x-access-token:${GH_PAT}@github.com/${FP_GIT}.git"
 
-      - name: Push Flatpak Repository
-        uses: ad-m/github-push-action@v1.3.0
-        with:
-          token: ${{ steps.keystore.outputs.GH_PAT }}
-          repository: ${{ steps.keystore.outputs.FP_GIT }}
-          branch: ${{ steps.keystore.outputs.FP_REF }}
-          directory: repo
+          git add -A
+          git commit --no-gpg-sign -m "build: \`${PKG_ID}\`"
+
+          for attempt in 1 2 3 4 5; do
+            if git push "$remote" "HEAD:${FP_REF}"; then
+              echo "Pushed on attempt ${attempt}."
+              exit 0
+            fi
+
+            if [ "$attempt" -eq 5 ]; then
+              echo "::error::Giving up after ${attempt} attempts -- too many concurrent Flatpak builds pushing at once."
+              exit 1
+            fi
+
+            echo "::warning::Push rejected (attempt ${attempt}), another build pushed first -- merging its changes in and retrying."
+            sleep $((attempt * 5))
+            git fetch "$remote" "${FP_REF}"
+
+            git merge --no-edit -X ours FETCH_HEAD || true
+            # Force-resolve anything the merge couldn't (shouldn't normally happen).
+            unmerged=$(git diff --name-only --diff-filter=U || true)
+            if [ -n "$unmerged" ]; then
+              echo "$unmerged" | xargs -r git checkout --ours --
+              git add -A
+              git commit --no-gpg-sign --no-edit
+            fi
+
+            flatpak build-update-repo flatpak
+            git add -A
+            if ! git diff --cached --quiet; then
+              git commit --no-gpg-sign -m "build: \`${PKG_ID}\` (repo summary refresh)"
+            fi
+          done
