@@ -67,8 +67,6 @@ jobs:
           FP_GIT: ${{ secrets.OP_ENTRY_FLATPAK_BUILDER }}/flatpak/repository
           FP_REF: ${{ secrets.OP_ENTRY_FLATPAK_BUILDER }}/flatpak/ref
 
-      - run: mkdir -p ./dist
-
       - name: Checkout Flatpak repository
         uses: actions/checkout@v7
         with:
@@ -99,18 +97,17 @@ jobs:
             repository: ${{ inputs.download-uri }}
             file: ${{ inputs.file-name }}
             pre-release: ${{ inputs.download-type-github-prerelease }}
-            path: dist
             name: source.${{ inputs.file-type }}
 
-      - run: |
-          ls -A .
-          ls -A dist
+      - name: Prepare build environments
+        run: |
+          mkdir -p ./dist
+          cp -f static/flatpak/manifests/${{ inputs.id }}.yaml manifests.yaml
 
       - name: Build Flatpak bundle
         uses: flatpak/flatpak-github-actions/flatpak-builder@v6
         with:
-          manifest-path: static/flatpak/manifests/${{ inputs.id }}.yaml
-          build-dir: dist
+          manifest-path: manifests.yaml
           repo-dir: repo
           bundle: ${{ inputs.id }}.flatpak
           artifact-name: ${{ inputs.id }}.flatpak
