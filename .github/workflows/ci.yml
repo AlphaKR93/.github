@@ -257,10 +257,10 @@ jobs:
     secrets: inherit
     with:
       id: com.discord.DiscordDevelopment
-      file-type: tar.gz
+      file-type: tar.br
       download-uri: ${{ fromJSON(needs.check.outputs.flatpak-discord-development || '{}').download_uri }}
       download-type: direct
-      main-extra-data-filename: discord.tar.gz
+      main-extra-data-filename: discord.tar.br
       # The exact 4 Vencord bundle files (and only those 4) that `VencordInstallerCli
       # -install` itself downloads, plus OpenAsar's nightly app.asar -- see the
       # comments in static/flatpak/manifests/com.discord.DiscordDevelopment.yaml.
@@ -272,5 +272,9 @@ jobs:
           {"filename": "vencord-renderer.css", "url": "https://github.com/Vendicated/Vencord/releases/latest/download/renderer.css"},
           {"filename": "openasar-app.asar", "url": "https://github.com/GooseMod/OpenAsar/releases/download/nightly/app.asar"}
         ]
+      # Discord's own per-module download URLs, resolved fresh by the `check` job
+      # (discord.mjs) since they're version-pinned and can't be written as a literal
+      # here the way Vencord's "latest release" links above can.
+      extra-data-dynamic: ${{ toJSON(fromJSON(needs.check.outputs.flatpak-discord-development || '{"modules":[]}').modules) }}
       check-key: discord-development
       check-value: ${{ fromJSON(needs.check.outputs.flatpak-discord-development || '{}').fingerprint }}

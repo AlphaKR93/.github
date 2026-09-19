@@ -50,7 +50,7 @@ on:
         description: |
           The `filename` of the module's main `type: extra-data` source in
           static/flatpak/manifests/<id>.yaml (e.g. "thorium.AppImage",
-          "discord.tar.gz"). Its `url`/`sha256`/`size` are patched with the values
+          "discord.tar.br"). Its `url`/`sha256`/`size` are patched with the values
           resolved from `download-uri` above.
 
       extra-data:
@@ -61,6 +61,16 @@ on:
           JSON array of additional `type: extra-data` sources to resolve and patch,
           beyond the main one above. Each entry: { "filename": string, "url": string }.
           Used e.g. by com.discord.DiscordDevelopment to inject Vencord/OpenAsar.
+      extra-data-dynamic:
+        type: string
+        required: false
+        default: '[]'
+        description: |
+          Same shape as `extra-data`, kept as a separate input because its entries
+          are computed at check-time (not known statically in ci.yml) -- e.g.
+          com.discord.DiscordDevelopment's per-module download URLs, which change
+          with every release and can't be written as a literal in ci.yml the way
+          Vencord's `extra-data` URLs (fixed "latest release" links) can.
 
       check-key:
         type: string
@@ -156,6 +166,7 @@ jobs:
           MAIN_URL: ${{ inputs.download-type == 'github' && steps.download-github.outputs.url || inputs.download-uri }}
           MAIN_PATH: source.${{ inputs.file-type }}
           EXTRA_JSON: ${{ inputs.extra-data }}
+          EXTRA_JSON_DYNAMIC: ${{ inputs.extra-data-dynamic }}
         run: |
           python3 - <<'PY'
           import hashlib, json, os, urllib.request
@@ -183,7 +194,7 @@ jobs:
               "url": os.environ["MAIN_URL"],
               "path": os.environ["MAIN_PATH"],
           }]
-          for e in json.loads(os.environ["EXTRA_JSON"]):
+          for e in json.loads(os.environ["EXTRA_JSON"]) + json.loads(os.environ["EXTRA_JSON_DYNAMIC"]):
               e = dict(e)
               e.setdefault("path", e["filename"])
               entries.append(e)

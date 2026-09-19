@@ -1,70 +1,52 @@
 #!/usr/bin/env node
-import { json, head, exec, args, queryParams, get } from './lib/index.mjs';
+import { json, exec, args, get } from './lib/index.mjs';
 
-const ARCH = {
-    windows: { x86: "win", amd64: "win/x64", arm64: "win/arm64" },
-    mac: { x86: null, amd64: null, arm64: "osx" },
-    linux: { x86: "linux", amd64: "linux", arm64: null },
-};
+// Discord's per-module "distro manifest" API -- the same one Flathub's own
+// com.discordapp.Discord package uses -- gives fixed, hash-verified URLs for the
+// real app and each of its modules. The older /api/updates/<channel> endpoint (this
+// script's previous implementation) only serves a ~2MB self-bootstrapping installer
+// for the "development" channel, which downloads the actual app at runtime instead --
+// see com.discord.DiscordDevelopment.yaml's apply_extra/discord.sh comments for why
+// that doesn't work inside a Flatpak sandbox (Chromium's zygote self-respawn can't
+// see paths outside /app once Flatpak spawns it into its own restricted sandbox).
+const PLATFORM = { linux: "linux" };
+const ARCH = { x86: "x86", amd64: "x64", arm64: "arm64" };
 
-/**
- * @param {string} value
- * @returns {string}
- */
-const capitalize = (value) => value.charAt(0).toUpperCase() + value.slice(1);
-const LINUX_FORMAT = "tar.gz";
+// Same module set Flathub's manifest fetches (beyond required_modules, adds Krisp
+// noise cancellation, Rich Presence, game activity detection, and zstd) for feature
+// parity with a normal Discord install.
+const MODULES = [
+    "discord_desktop_core", "discord_erlpack", "discord_game_utils",
+    "discord_krisp", "discord_rpc", "discord_spellcheck",
+    "discord_utils", "discord_voice", "discord_zstd",
+];
 
-/**
- * @type {Record<"windows" | "mac" | "linux", (channel: string, version: string) => string>}
- */
-const FORMAT = {
-    windows: (channel, _) => `Discord${capitalize(channel)}Setup.exe`,
-    mac: (channel, _) => `Discord${capitalize(channel)}.dmg`,
-    linux: (channel, version) => `discord-${channel}-${version}.${LINUX_FORMAT}`,
-}
-
-const usage = `\
-(windows|mac|linux) (amd64|arm64) (stable|ptb|canary|development)`;
+const usage = `(linux) (amd64|arm64) (stable|ptb|canary|development)`;
 await exec(usage, true, () => {
-    const { channel, ...argv } = args(() => {
+    const argv = args(() => {
         const [nodeExecutable, script, platform, arch, channel] = process.argv;
         return { platform, arch, channel };
     });
 
-    /**
-     * @type {string}
-     */
-    const download = get(argv, get(argv, ARCH, "platform"), "arch");
-    const [platform, arch] = download.split('/');
-
-    const format = get(argv, FORMAT, "platform");
+    const platform = get(argv, PLATFORM, "platform");
+    const arch = get(argv, ARCH, "arch");
 
     return [
         async () => {
-            const version = await json(`https://discord.com/api/updates/${channel}` + queryParams({ platform, arch, format: LINUX_FORMAT }));
-            const response = await head(`https://${channel}.dl2.discordapp.net/apps/${platform}/${version.name}/${format(channel, version.name)}`);
+            const manifest = await json(
+                `https://updates.discord.com/distributions/app/manifests/latest?channel=${argv.channel}&platform=${platform}&arch=${arch}`
+            );
 
-            const uploadDate = response.headers.get('x-goog-generation') ?? '';
-            let md5 = response.headers.get('x-goog-hash', '').match(/md5=([^,\s]+)/)?.[1];
-            md5 = md5 ? Buffer.from(md5, "base64").toString("hex") : response.etag;
-
-            return {
-                download_uri: response.url, size: response.size, version: version.name,
-                fingerprint: queryParams({ md5: md5, releaseDate: version.pub_date, upload: uploadDate }).slice(1)
-            };
-        },
-        async () => {
-            const response = await head(`https://discord.com/api/download/${channel}` + queryParams({ platform, arch, format: LINUX_FORMAT }));
-            const version = response.url.match(/\/linux\/([\d.]+)\//)?.[1] ?? '';
-
-            const uploadDate = response.headers.get('x-goog-generation') ?? '';
-            let md5 = response.headers.get('x-goog-hash', '').match(/md5=([^,\s]+)/)?.[1];
-            md5 = md5 ? Buffer.from(md5, "base64").toString("hex") : response.etag;
+            const modules = MODULES
+                .filter((name) => manifest.modules[name])
+                .map((name) => ({ filename: `${name}_module.tar.br`, url: manifest.modules[name].full.url }));
 
             return {
-                download_uri: response.url, size: response.size, version,
-                fingerprint: queryParams({ md5: md5, upload: uploadDate }).slice(1)
+                download_uri: manifest.full.url,
+                fingerprint: manifest.full.package_sha256,
+                version: manifest.full.host_version.join("."),
+                modules,
             };
         },
     ];
-})
+});
