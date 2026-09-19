@@ -108,7 +108,7 @@ jobs:
         uses: flatpak/flatpak-github-actions/flatpak-builder@v6
         with:
           manifest-path: manifests.yaml
-          repo-dir: repo
+          repo-dir: repo/flatpak
           bundle: ${{ inputs.id }}.flatpak
           artifact-name: ${{ inputs.id }}.flatpak
           verbose: true
