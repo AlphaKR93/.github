@@ -39,7 +39,7 @@ modules:
       - desktop-file-edit --set-key=Exec --set-value='beeper.sh %U' --set-icon=com.beeper.Beeper /app/share/applications/com.beeper.Beeper.desktop
     sources:
       - type: file
-        path: beeper.AppImage
+        path: source.AppImage
         dest-filename: beeper.AppImage
       - type: script
         dest-filename: beeper.sh
