@@ -1,0 +1,66 @@
+# $schema: https://raw.githubusercontent.com/flatpak/flatpak-builder/main/data/flatpak-manifest.schema.json
+
+id: com.anthropic.Claude
+runtime: org.freedesktop.Platform
+runtime-version: "25.08"
+sdk: org.freedesktop.Sdk
+base: org.electronjs.Electron2.BaseApp
+base-version: "25.08"
+command: claude-desktop
+tags:
+  - proprietary
+
+finish-args:
+  - --share=ipc
+  - --share=network
+  - --socket=x11
+  - --socket=wayland
+  - --socket=pulseaudio
+  - --device=dri
+  - --filesystem=xdg-download
+  - --talk-name=org.freedesktop.Notifications
+  - --talk-name=org.freedesktop.FileManager1
+  - --talk-name=org.freedesktop.secrets
+  - --talk-name=org.kde.StatusNotifierWatcher
+
+modules:
+  - name: claude-desktop
+    buildsystem: simple
+    build-commands:
+      - install -Dm755 apply_extra -t /app/bin
+      - install -Dm755 claude-desktop.sh /app/bin/claude-desktop
+      # Use the build-time-only download to install launcher metadata. The real
+      # DEB remains extra-data, so it is hash-verified and fetched on install.
+      - mkdir extracted
+      - ar p claude-desktop.deb data.tar.xz | tar -xJf - -C extracted ./usr/share/applications ./usr/share/icons
+      - install -Dm644 extracted/usr/share/applications/com.anthropic.Claude.desktop /app/share/applications/com.anthropic.Claude.desktop
+      - desktop-file-edit --set-key=Exec --set-value='claude-desktop %U' --set-key=Icon --set-value=com.anthropic.Claude /app/share/applications/com.anthropic.Claude.desktop
+      - |
+        for icon in extracted/usr/share/icons/hicolor/*/apps/claude-desktop.png; do
+          size=$(basename "$(dirname "$(dirname "$icon")")")
+          install -Dm644 "$icon" "/app/share/icons/hicolor/$size/apps/com.anthropic.Claude.png"
+        done
+      - rm -rf extracted claude-desktop.deb
+    sources:
+      - type: file
+        path: source.deb
+        dest-filename: claude-desktop.deb
+      - type: extra-data
+        filename: claude-desktop.deb
+        url: 'https://invalid.example/placeholder'
+        sha256: '0000000000000000000000000000000000000000000000000000000000000000'
+        size: 0
+      - type: script
+        dest-filename: apply_extra
+        commands:
+          - |
+            set -eu
+            mkdir claude-desktop
+            ar p claude-desktop.deb data.tar.xz | tar -xJf - -C claude-desktop
+            rm claude-desktop.deb
+            test -x claude-desktop/usr/bin/claude-desktop
+      - type: script
+        dest-filename: claude-desktop.sh
+        commands:
+          - export TMPDIR="${XDG_RUNTIME_DIR}/app/${FLATPAK_ID}"
+          - exec zypak-wrapper /app/extra/claude-desktop/usr/bin/claude-desktop "$@"

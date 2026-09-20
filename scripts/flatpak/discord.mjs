@@ -6,7 +6,8 @@ import { json, exec, args, get } from './lib/index.mjs';
 // real app and each of its modules. The older /api/updates/<channel> endpoint (this
 // script's previous implementation) only serves a ~2MB self-bootstrapping installer
 // for the "development" channel, which downloads the actual app at runtime instead --
-// see com.discord.DiscordDevelopment.yaml's apply_extra/discord.sh comments for why
+// see com.discordapp.DiscordDevelopment.yaml's apply_extra/discord-development.sh
+// comments for why
 // that doesn't work inside a Flatpak sandbox (Chromium's zygote self-respawn can't
 // see paths outside /app once Flatpak spawns it into its own restricted sandbox).
 const PLATFORM = { linux: "linux" };
