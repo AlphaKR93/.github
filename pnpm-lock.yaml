@@ -92,14 +92,14 @@ importers:
         specifier: ^8.6.0
         version: 8.6.0
 
-  actions/download-github:
+  actions/patch-flatpak-manifest:
     dependencies:
       '@actions/core':
         specifier: ^3.0.1
         version: 3.0.1
-      '@actions/github':
-        specifier: ^9.1.1
-        version: 9.1.1
+      yaml:
+        specifier: ^2.8.1
+        version: 2.9.1
     devDependencies:
       '@rollup/plugin-commonjs':
         specifier: ^29.0.3
@@ -125,9 +125,6 @@ importers:
       typescript:
         specifier: ^6.0.3
         version: 6.0.3
-      undici-types:
-        specifier: ^8.6.0
-        version: 8.6.0
 
   packages/@types/flaresolverr: {}
 
@@ -629,6 +626,11 @@ packages:
     resolution: {integrity: sha512-QaKxh0eNIi2mE9p2vEdzfagOKHCcj1pJ56EEHGQOVxp8r9/iszLUUV7v89x9O1p/T+NlTM5W7jW6+cz4Fq1YVg==}
     engines: {node: '>=18'}
 
+  yaml@2.9.1:
+    resolution: {integrity: sha512-3NxN8+78OdzbT7C/WjGsyfPAtJaN3FNDsWxv7Y7mcDsT/oOmgW8BpyQQFFBnvZE3j9Y2Sdz1ULFLezL7Eb2yFw==}
+    engines: {node: '>= 14.6'}
+    hasBin: true
+
 snapshots:
 
   '@actions/core@3.0.1':
@@ -1093,3 +1095,5 @@ snapshots:
       iconv-lite: 0.6.3
 
   whatwg-mimetype@4.0.0: {}
+
+  yaml@2.9.1: {}

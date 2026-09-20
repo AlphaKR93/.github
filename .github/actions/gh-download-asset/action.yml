@@ -61,7 +61,8 @@ runs:
 
           core.info(`Using latest release: ${release.name ?? release.tag_name} (${release.tag_name}): ${release.url}`);
           const fileResponse = await fetch(asset.browser_download_url);
-          const destPath = `${{ inputs.path }}/${"${{ inputs.name }}" ?? asset.name}`;
+          const inputsName = "${{ inputs.name }}";
+          const destPath = `${{ inputs.path }}/${inputsName ? inputsName : asset.name}`;
 
           core.info(`Writing file ${asset.name} to ${destPath}`);
           const { createWriteStream } = await import("node:fs");

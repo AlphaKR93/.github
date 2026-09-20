@@ -1,0 +1,27 @@
+# $schema: https://www.schemastore.org/github-action.json
+
+name: Patch Flatpak Manifest
+description: Type-safely inject resolved extra-data source info (url, sha256, size) into a Flatpak manifest.
+
+inputs:
+  manifest:
+    description: Path to the source Flatpak manifest YAML file
+    required: true
+  output:
+    description: Path to write the patched manifest to
+    required: true
+    default: manifests.yaml
+  entries:
+    description: |
+      JSON array of extra-data entries to patch in, matched by the `filename` of each
+      `type: extra-data` source across all modules. Each entry:
+      { "filename": string, "url": string, "sha256": string (64 lowercase hex chars), "size": number (bytes, > 0) }
+    required: true
+
+outputs:
+  manifest:
+    description: Path to the patched manifest
+
+runs:
+  using: node24
+  main: dist/index.js

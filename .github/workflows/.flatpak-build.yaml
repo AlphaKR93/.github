@@ -12,20 +12,25 @@ on:
 
       file-name:
         type: string
-        required: true
-        description:
-          Regular expression rule of the downloaded file name
+        required: false
+        default: ''
+        description: |
+          Regular expression rule of the downloaded file name.
+          Only used (and required) for `download-type: github`.
       file-type:
         type: string
         required: true
         description: |
           Type of Package
-          One of: (AppImage)
+          One of: (AppImage, tar.gz, tar.xz)
 
       download-uri:
         type: string
         required: true
-        description: Package download URI of the package
+        description: |
+          Package download URI of the package.
+          For `download-type: github`, the `owner/repo` to look up a release asset in.
+          For `download-type: direct`, the literal, already-resolved download URL.
       download-type:
         type: string
         required: true
@@ -38,6 +43,48 @@ on:
         required: false
         default: false
         description: Whether to use prerelease on GitHub Release
+
+      main-extra-data-filename:
+        type: string
+        required: true
+        description: |
+          The `filename` of the module's main `type: extra-data` source in
+          static/flatpak/manifests/<id>.yaml (e.g. "thorium.AppImage",
+          "discord.tar.br"). Its `url`/`sha256`/`size` are patched with the values
+          resolved from `download-uri` above.
+
+      extra-data:
+        type: string
+        required: false
+        default: '[]'
+        description: |
+          JSON array of additional `type: extra-data` sources to resolve and patch,
+          beyond the main one above. Each entry: { "filename": string, "url": string }.
+          Used e.g. by com.discord.DiscordDevelopment to inject Vencord/OpenAsar.
+      extra-data-dynamic:
+        type: string
+        required: false
+        default: '[]'
+        description: |
+          Same shape as `extra-data`, kept as a separate input because its entries
+          are computed at check-time (not known statically in ci.yml) -- e.g.
+          com.discord.DiscordDevelopment's per-module download URLs, which change
+          with every release and can't be written as a literal in ci.yml the way
+          Vencord's `extra-data` URLs (fixed "latest release" links) can.
+
+      check-key:
+        type: string
+        required: true
+        description: |
+          Short package key (e.g. "thorium", "beeper", "discord-development"), used as
+          the lookup key in dist/flatpak.json (see ci.yml's `check` job).
+      check-value:
+        type: string
+        required: true
+        description: |
+          The version marker to record under `check-key` once this build succeeds, so
+          the next `check` run knows this release was already built: the release tag
+          for `download-type: github`, the check step's fingerprint otherwise.
 
     secrets:
       OP_SERVICE_ACCOUNT_TOKEN:
@@ -87,22 +134,90 @@ jobs:
           submodules: true
           persist-credentials: false
 
-      # Download packages
-      - parallel:
-        - id: download-github
-          if: inputs.download-type == 'github'
-          name: Download from GitHub
-          uses: ./.github/actions/gh-download-asset
-          with:
-            repository: ${{ inputs.download-uri }}
-            file: ${{ inputs.file-name }}
-            pre-release: ${{ inputs.download-type-github-prerelease }}
-            name: source.${{ inputs.file-type }}
+      # Only resolves which exact release asset to use (and downloads it to
+      # source.${{ inputs.file-type }} for icon/desktop-file extraction below); the
+      # real url/sha256/size that end up in the manifest are always (re)computed from
+      # the downloaded bytes by "Resolve extra-data sources", regardless of
+      # download-type. Talks to the GitHub API with regex asset matching, which is
+      # genuinely fiddly to get right in shell, so this stays its own action.
+      - id: download-github
+        if: inputs.download-type == 'github'
+        name: Download from GitHub
+        uses: ./.github/actions/gh-download-asset
+        with:
+          repository: ${{ inputs.download-uri }}
+          file: ${{ inputs.file-name }}
+          pre-release: ${{ inputs.download-type-github-prerelease }}
+          name: source.${{ inputs.file-type }}
 
-      - name: Prepare build environments
+      # Downloads (if download-type == direct; a no-op re-hash otherwise, since the
+      # file already exists from the step above) and hashes the main package source,
+      # plus any additional extra-data sources (e.g. Vencord/OpenAsar for Discord),
+      # producing { filename, url, sha256, size } entries for the manifest patch
+      # below. Neither of these downloads ever gets embedded in the OSTree repo this
+      # job pushes: the main source here is only read for icon/desktop-file
+      # extraction, and flatpak itself downloads the real, hash-verified files
+      # straight to the end user's machine at install time (see each manifest's
+      # apply_extra script) -- so GitHub Pages never needs to serve them via LFS.
+      - id: extra-data
+        name: Resolve extra-data sources
+        env:
+          MAIN_FILENAME: ${{ inputs.main-extra-data-filename }}
+          MAIN_URL: ${{ inputs.download-type == 'github' && steps.download-github.outputs.url || inputs.download-uri }}
+          MAIN_PATH: source.${{ inputs.file-type }}
+          EXTRA_JSON: ${{ inputs.extra-data }}
+          EXTRA_JSON_DYNAMIC: ${{ inputs.extra-data-dynamic }}
         run: |
-          mkdir -p ./dist
-          cp -f static/flatpak/manifests/${{ inputs.id }}.yaml manifests.yaml
+          python3 - <<'PY'
+          import hashlib, json, os, urllib.request
+
+          def hash_and_size(path):
+              h = hashlib.sha256()
+              with open(path, "rb") as f:
+                  for chunk in iter(lambda: f.read(1 << 20), b""):
+                      h.update(chunk)
+              return h.hexdigest(), os.path.getsize(path)
+
+          def ensure_downloaded(path, url):
+              if os.path.exists(path):
+                  return
+              req = urllib.request.Request(url, headers={"User-Agent": "flatpak-build"})
+              with urllib.request.urlopen(req) as resp, open(path, "wb") as out:
+                  while True:
+                      chunk = resp.read(1 << 20)
+                      if not chunk:
+                          break
+                      out.write(chunk)
+
+          entries = [{
+              "filename": os.environ["MAIN_FILENAME"],
+              "url": os.environ["MAIN_URL"],
+              "path": os.environ["MAIN_PATH"],
+          }]
+          for e in json.loads(os.environ["EXTRA_JSON"]) + json.loads(os.environ["EXTRA_JSON_DYNAMIC"]):
+              e = dict(e)
+              e.setdefault("path", e["filename"])
+              entries.append(e)
+
+          resolved = []
+          for e in entries:
+              ensure_downloaded(e["path"], e["url"])
+              sha256, size = hash_and_size(e["path"])
+              resolved.append({"filename": e["filename"], "url": e["url"], "sha256": sha256, "size": size})
+
+          with open(os.environ["GITHUB_OUTPUT"], "a") as f:
+              f.write("entries=" + json.dumps(resolved) + "\n")
+          PY
+
+      # Complex enough (structure-aware YAML lookup across every module's sources,
+      # matched by filename, plus real validation of each field) that it stays its
+      # own type-checked action rather than shell/sed against the raw YAML.
+      - name: Patch Flatpak manifest with resolved sources
+        uses: ./actions/patch-flatpak-manifest
+        with:
+          manifest: static/flatpak/manifests/${{ inputs.id }}.yaml
+          output: manifests.yaml
+          entries: ${{ steps.extra-data.outputs.entries }}
 
       - name: Build Flatpak bundle
         uses: flatpak/flatpak-github-actions/flatpak-builder@v6
@@ -113,18 +228,88 @@ jobs:
           artifact-name: ${{ inputs.id }}.flatpak
           verbose: true
 
-      - name: Commit changes
+      # dist/flatpak.json (read by ci.yml's `check` job) is what future runs compare
+      # the freshly-fetched tag/fingerprint against to decide whether a rebuild is
+      # needed, so every package (including download-type: github ones) must update
+      # its entry here on a successful build, or `check` will think this release was
+      # never built.
+      - name: Update Flatpak repository check-state
+        env:
+          CHECK_KEY: ${{ inputs.check-key }}
+          CHECK_VALUE: ${{ inputs.check-value }}
         run: |
+          python3 - <<'PY'
+          import json, os
+
+          key = os.environ["CHECK_KEY"]
+          value = os.environ["CHECK_VALUE"]
+          path = "repo/flatpak.json"
+          try:
+              with open(path) as f:
+                  data = json.load(f)
+          except FileNotFoundError:
+              data = {}
+          data[key] = value
+          with open(path, "w") as f:
+              json.dump(data, f, indent=2, sort_keys=True)
+              f.write("\n")
+          PY
+
+      # All 5 packages build in parallel and push to the same Flatpak repo, so a
+      # later push here routinely loses the race to another job's push that
+      # landed first. Rather than serializing the (expensive) builds themselves,
+      # retry just this cheap tail: pull the winner's changes in and push again.
+      # Ref/object files never overlap between jobs (each owns a different
+      # app id / content-addressed objects) and flatpak.json is an upsert of
+      # independent keys, so a normal merge handles almost
+      # everything; `-X ours` is only a last-resort tiebreaker for the rare
+      # adjacent-line conflict. The OSTree summary is a generated binary index
+      # over every branch in the repo, which a merge can't meaningfully combine,
+      # so it's always regenerated from the post-merge ref state instead of
+      # trusting whatever the merge produced for it.
+      - name: Commit and push Flatpak repository
+        env:
+          GH_PAT: ${{ steps.keystore.outputs.GH_PAT }}
+          FP_GIT: ${{ steps.keystore.outputs.FP_GIT }}
+          FP_REF: ${{ steps.keystore.outputs.FP_REF }}
+          PKG_ID: ${{ inputs.id }}
+        run: |
+          set -eu
           cd repo
-          git add .
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git config user.name 'github-actions[bot]'
-          git commit --no-gpg-sign -m 'build: `${{ inputs.id }}`'
+          remote="https://x-access-token:${GH_PAT}@github.com/${FP_GIT}.git"
 
-      - name: Push Flatpak Repository
-        uses: ad-m/github-push-action@v1.3.0
-        with:
-          token: ${{ steps.keystore.outputs.GH_PAT }}
-          repository: ${{ steps.keystore.outputs.FP_GIT }}
-          branch: ${{ steps.keystore.outputs.FP_REF }}
-          directory: repo
+          git add -A
+          git commit --no-gpg-sign -m "build: \`${PKG_ID}\`"
+
+          for attempt in 1 2 3 4 5; do
+            if git push "$remote" "HEAD:${FP_REF}"; then
+              echo "Pushed on attempt ${attempt}."
+              exit 0
+            fi
+
+            if [ "$attempt" -eq 5 ]; then
+              echo "::error::Giving up after ${attempt} attempts -- too many concurrent Flatpak builds pushing at once."
+              exit 1
+            fi
+
+            echo "::warning::Push rejected (attempt ${attempt}), another build pushed first -- merging its changes in and retrying."
+            sleep $((attempt * 5))
+            git fetch "$remote" "${FP_REF}"
+
+            git merge --no-edit -X ours FETCH_HEAD || true
+            # Force-resolve anything the merge couldn't (shouldn't normally happen).
+            unmerged=$(git diff --name-only --diff-filter=U || true)
+            if [ -n "$unmerged" ]; then
+              echo "$unmerged" | xargs -r git checkout --ours --
+              git add -A
+              git commit --no-gpg-sign --no-edit
+            fi
+
+            flatpak build-update-repo flatpak
+            git add -A
+            if ! git diff --cached --quiet; then
+              git commit --no-gpg-sign -m "build: \`${PKG_ID}\` (repo summary refresh)"
+            fi
+          done

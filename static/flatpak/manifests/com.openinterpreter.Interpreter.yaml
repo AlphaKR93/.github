@@ -1,10 +1,10 @@
 # $schema: https://raw.githubusercontent.com/flatpak/flatpak-builder/main/data/flatpak-manifest.schema.json
 
-id: com.openinterpreter.OpenInterpreter
+id: com.openinterpreter.Interpreter
 runtime: org.freedesktop.Platform
 runtime-version: "25.08"
 sdk: org.freedesktop.Sdk
-base: org.chromium.Chromium.BaseApp
+base: org.electronjs.Electron2.BaseApp
 base-version: "25.08"
 command: interpreter
 
@@ -21,29 +21,89 @@ finish-args:
   - --talk-name=org.freedesktop.secrets
 
 modules:
-  - name: beeper
+  # apply_extra (below) runs at install time with no /proc, so the AppImage's own
+  # `--appimage-extract` can't be used there (it needs /proc/self/exe to find its
+  # own appended squashfs data -- confirmed by reproducing its exact failure with
+  # /proc masked). unsquashfs operates on the file directly and doesn't need it, so
+  # we build it from source (per docs.flatpak.org/en/latest/module-sources.html
+  # #file-sources) and ship it in /app/bin instead.
+  - name: unsquashfs
     buildsystem: simple
     build-commands:
+      - GZIP_SUPPORT=1 XZ_SUPPORT=1 LZO_SUPPORT=1 LZ4_SUPPORT=1 ZSTD_SUPPORT=1 make -C squashfs-tools -j ${FLATPAK_BUILDER_N_JOBS} unsquashfs
+      - install -Dpm755 -t /app/bin squashfs-tools/unsquashfs
+    sources:
+      - type: git
+        url: https://github.com/plougher/squashfs-tools
+        tag: 4.6.1
+        commit: d8cb82d9840330f9344ec37b992595b5d7b44184
+
+  - name: interpreter
+    buildsystem: simple
+    build-commands:
+      - install -Dm755 apply_extra -t /app/bin
+      - install -Dm755 interpreter.sh /app/bin/interpreter
       - chmod +x interpreter.AppImage
       - ./interpreter.AppImage --appimage-extract
-      # Install AppImage
-      - mkdir -p /app/interpreter
-      - cp -a squashfs-root/. /app/interpreter/
-      - rm -rf /app/interpreter/AppRun /app/interpreter/interpreter.{desktop,png} /app/interpreter/usr/share
-      - install -Dm755 interpreter.sh /app/bin/interpreter
-      # Copy Resources
-      - cp -a squashfs-root/usr/lib /app/lib
-      - install -Dm644 squashfs-root/usr/share/icons/hicolor/1024x1024/apps/interpreter.png /app/share/icons/hicolor/1024x1024/apps/com.openinterpreter.Interpreter.png
+      # Copy resources. Flathub caps hicolor icons at 512x512, but electron-
+      # builder's Linux target ships larger sizes too (e.g. 1024x1024) --
+      # install whichever sizes are actually <=512 and skip the rest.
+      - |
+        for icon in squashfs-root/usr/share/icons/hicolor/*/apps/interpreter.png; do
+          size=$(basename "$(dirname "$(dirname "$icon")")")
+          [ "${size%%x*}" -le 512 ] || continue
+          install -Dm644 "$icon" "/app/share/icons/hicolor/$size/apps/com.openinterpreter.Interpreter.png"
+        done
       # Install desktop file
       - install -Dm644 squashfs-root/interpreter.desktop /app/share/applications/com.openinterpreter.Interpreter.desktop
       - desktop-file-edit --set-key=Exec --set-value='interpreter %U' --set-icon=com.openinterpreter.Interpreter /app/share/applications/com.openinterpreter.Interpreter.desktop
     sources:
+      # Downloaded fresh at build time (discarded after use) purely to extract the icon
+      # and desktop file; only the real download below (verified via extra-data) is
+      # what actually ships in the OSTree repo, so it never needs LFS on GitHub Pages.
       - type: file
         path: source.AppImage
         dest-filename: interpreter.AppImage
+      # The real AppImage is never embedded in the build: flatpak downloads it straight
+      # to the end user's machine at install time (see apply_extra below), verified
+      # against this sha256/size.
+      - type: extra-data
+        filename: interpreter.AppImage
+        url: 'https://invalid.example/placeholder'
+        sha256: '0000000000000000000000000000000000000000000000000000000000000000'
+        size: 0
+      # Runs at install time on the end user's machine, with cwd=/app/extra and no
+      # network access. interpreter.AppImage here is the extra-data download above.
+      # AppImages are an ELF stub with a squashfs image appended; unsquashfs needs
+      # the exact byte offset where the squashfs actually starts (unlike a bare
+      # snap/squashfs file, it won't find it on its own), so every occurrence of the
+      # squashfs magic bytes is tried in turn -- `-l` (list) is cheap and fails
+      # cleanly on a false match -- until one actually parses as a real superblock.
+      - type: script
+        dest-filename: apply_extra
+        commands:
+          - |
+            set -e
+            off=""
+            for candidate in $(grep -abo hsqs interpreter.AppImage | cut -d: -f1); do
+              if unsquashfs -o "$candidate" -l interpreter.AppImage >/dev/null 2>&1; then
+                off="$candidate"
+                break
+              fi
+            done
+            if [ -z "$off" ]; then
+              echo "apply_extra: could not locate a SQUASHFS superblock in interpreter.AppImage" >&2
+              exit 1
+            fi
+            unsquashfs -no-progress -o "$off" -d squashfs-root interpreter.AppImage
+            mkdir -p interpreter
+            cp -a squashfs-root/. interpreter/
+            rm -rf interpreter/AppRun interpreter/interpreter.desktop interpreter/interpreter.png interpreter/usr/share
+            rm -rf squashfs-root interpreter.AppImage
+            test -x interpreter/interpreter
       - type: script
         dest-filename: interpreter.sh
         commands:
           - export TMPDIR="${XDG_RUNTIME_DIR}/app/${FLATPAK_ID}"
-          - export LD_LIBRARY_PATH="/app/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
-          - exec zypak-wrapper /app/interpreter/interpreter "$@"
+          - export LD_LIBRARY_PATH="/app/extra/interpreter/usr/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+          - exec zypak-wrapper /app/extra/interpreter/interpreter "$@"
