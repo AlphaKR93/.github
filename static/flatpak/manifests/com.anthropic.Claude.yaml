@@ -56,7 +56,7 @@ modules:
           - |
             set -eu
             mkdir claude-desktop
-            bsdtar -xf claude-desktop.deb data.tar.xz | tar -xJf - -C claude-desktop
+            bsdtar -Oxf claude-desktop.deb data.tar.xz | tar -xJf - -C claude-desktop
             rm claude-desktop.deb
             test -x claude-desktop/usr/bin/claude-desktop
       - type: script
