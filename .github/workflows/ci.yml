@@ -250,6 +250,7 @@ jobs:
   build-flatpak-discord-development:
     needs: check
     if: >-
+      'true' == 'false' ||
       inputs.to-patch == 'flatpak-discord-development' ||
       fromJSON(needs.check.outputs.flatpak-discord-development || '{}').fingerprint != fromJSON(needs.check.outputs.flatpak || '{}')['discord-development']
     name: Build Discord (Development)
