@@ -22,7 +22,7 @@ on:
         required: true
         description: |
           Type of Package
-          One of: (AppImage, tar.gz, tar.xz)
+          One of: (AppImage, deb, tar.br, tar.gz, tar.xz)
 
       download-uri:
         type: string

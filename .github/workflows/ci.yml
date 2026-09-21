@@ -116,6 +116,10 @@ jobs:
           name: Check new release (Discord Development)
           run:
             node scripts/flatpak/discord.mjs linux amd64 development >> $GITHUB_OUTPUT
+        - id: flatpak-claude
+          if: github.event_name != 'workflow_dispatch' || inputs.to-patch == 'all' || inputs.to-patch == 'flatpak-claude'
+          name: Check new release (Claude Desktop)
+          run: node scripts/flatpak/claude.mjs >> $GITHUB_OUTPUT
         - id: flatpak-beeper
           if: github.event_name != 'workflow_dispatch' || inputs.to-patch == 'all' || inputs.to-patch == 'flatpak-beeper'
           name: Check new release (Beeper Nightly)
@@ -257,25 +261,28 @@ jobs:
     uses: ./.github/workflows/.flatpak-build.yaml
     secrets: inherit
     with:
-      id: com.discord.DiscordDevelopment
+      id: com.discordapp.DiscordDevelopment
       file-type: tar.br
       download-uri: ${{ fromJSON(needs.check.outputs.flatpak-discord-development || '{}').download_uri }}
       download-type: direct
       main-extra-data-filename: discord.tar.br
-      # The exact 4 Vencord bundle files (and only those 4) that `VencordInstallerCli
-      # -install` itself downloads, plus OpenAsar's nightly app.asar -- see the
-      # comments in static/flatpak/manifests/com.discord.DiscordDevelopment.yaml.
-      extra-data: >-
-        [
-          {"filename": "vencord-patcher.js", "url": "https://github.com/Vendicated/Vencord/releases/latest/download/patcher.js"},
-          {"filename": "vencord-preload.js", "url": "https://github.com/Vendicated/Vencord/releases/latest/download/preload.js"},
-          {"filename": "vencord-renderer.js", "url": "https://github.com/Vendicated/Vencord/releases/latest/download/renderer.js"},
-          {"filename": "vencord-renderer.css", "url": "https://github.com/Vendicated/Vencord/releases/latest/download/renderer.css"},
-          {"filename": "openasar-app.asar", "url": "https://github.com/GooseMod/OpenAsar/releases/download/nightly/app.asar"}
-        ]
-      # Discord's own per-module download URLs, resolved fresh by the `check` job
-      # (discord.mjs) since they're version-pinned and can't be written as a literal
-      # here the way Vencord's "latest release" links above can.
       extra-data-dynamic: ${{ toJSON(fromJSON(needs.check.outputs.flatpak-discord-development || '{"modules":[]}').modules) }}
       check-key: discord-development
       check-value: ${{ fromJSON(needs.check.outputs.flatpak-discord-development || '{}').fingerprint }}
+
+  build-flatpak-claude:
+    needs: check
+    if: >-
+      inputs.to-patch == 'flatpak-claude' ||
+      fromJSON(needs.check.outputs.flatpak-claude || '{}').fingerprint != fromJSON(needs.check.outputs.flatpak || '{}').claude
+    name: Build Claude Desktop
+    uses: ./.github/workflows/.flatpak-build.yaml
+    secrets: inherit
+    with:
+      id: com.anthropic.Claude
+      file-type: deb
+      download-uri: ${{ fromJSON(needs.check.outputs.flatpak-claude || '{}').download_uri }}
+      download-type: direct
+      main-extra-data-filename: claude-desktop.deb
+      check-key: claude
+      check-value: ${{ fromJSON(needs.check.outputs.flatpak-claude || '{}').fingerprint }}
