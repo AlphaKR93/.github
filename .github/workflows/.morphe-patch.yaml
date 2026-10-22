@@ -134,7 +134,7 @@ jobs:
           JSTDOUT=$(java -jar ${{ steps.patcher.outputs.file }} list-versions --prerelease \
             --patches=${{ steps.patches.outputs.file }} \
             --filter-package-names=${{ inputs.package-id }})
-          VERSIONS=$(echo -e "$JSTDOUT" | head -n -2 | tail -n +3)
+          VERSIONS=$(echo -e "$JSTDOUT" | head -n -1 | tail -n +4)
           echo -e "$JSTDOUT"
           echo -e "\n"
 
