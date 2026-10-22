@@ -134,12 +134,13 @@ jobs:
           JSTDOUT=$(java -jar ${{ steps.patcher.outputs.file }} list-versions --prerelease \
             --patches=${{ steps.patches.outputs.file }} \
             --filter-package-names=${{ inputs.package-id }})
-          VERSIONS=$(echo -e "$JSTDOUT" | head -n -1 | tail -n +3)
+          VERSIONS=$(echo -e "$JSTDOUT" | head -n -2 | tail -n +3)
           echo -e "$JSTDOUT"
           echo -e "\n"
 
-          echo -e "grepped:\n"
+          echo -e "grepped:"
           echo -e "$VERSIONS"
+          echo -e "\n"
 
           VERSION=$(echo -e "$VERSIONS" | cut -f 2 | cut -d ' ' -f 1 | sort | tail -1)
           echo "Using supported latest version: $VERSION"
