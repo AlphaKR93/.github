@@ -135,8 +135,11 @@ jobs:
             --patches=${{ steps.patches.outputs.file }} \
             --filter-package-names=${{ inputs.package-id }})
           VERSIONS=$(echo -e "$JSTDOUT" | head -n -1 | tail -n +3)
-          echo -e "$VERSIONS"
+          echo -e "$JSTDOUT"
           echo -e "\n"
+
+          echo -e "grepped:\n"
+          echo -e "$VERSIONS"
 
           VERSION=$(echo -e "$VERSIONS" | cut -f 2 | cut -d ' ' -f 1 | sort | tail -1)
           echo "Using supported latest version: $VERSION"
