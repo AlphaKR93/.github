@@ -213,23 +213,6 @@ jobs:
       check-key: beeper
       check-value: ${{ fromJSON(needs.check.outputs.flatpak-beeper || '{}').fingerprint }}
 
-  build-flatpak-openinterpreter:
-    needs: check
-    if: >-
-      inputs.to-patch == 'flatpak-interpreter' ||
-      fromJSON(needs.check.outputs.flatpak-openinterpreter || '{}').fingerprint != fromJSON(needs.check.outputs.flatpak || '{}').openinterpreter
-    name: Build OpenInterpreter Desktop
-    uses: ./.github/workflows/.flatpak-build.yaml
-    secrets: inherit
-    with:
-      id: com.openinterpreter.Interpreter
-      file-type: AppImage
-      download-uri: ${{ fromJSON(needs.check.outputs.flatpak-openinterpreter || '{}').download_uri }}
-      download-type: direct
-      main-extra-data-filename: interpreter.AppImage
-      check-key: openinterpreter
-      check-value: ${{ fromJSON(needs.check.outputs.flatpak-openinterpreter || '{}').fingerprint }}
-
   build-flatpak-thunderbird-beta:
     needs: check
     if: >-
