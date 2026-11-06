@@ -246,36 +246,3 @@ jobs:
       main-extra-data-filename: thunderbird.tar.xz
       check-key: thunderbird
       check-value: ${{ fromJSON(needs.check.outputs.flatpak-thunderbird || '{}').fingerprint }}
-
-  build-flatpak-discord-development:
-    needs: check
-    if: >-
-      'true' == 'false' ||
-      inputs.to-patch == 'flatpak-discord-development' ||
-      fromJSON(needs.check.outputs.flatpak-discord-development || '{}').fingerprint != fromJSON(needs.check.outputs.flatpak || '{}')['discord-development']
-    name: Build Discord (Development)
-    uses: ./.github/workflows/.flatpak-build.yaml
-    secrets: inherit
-    with:
-      id: com.discord.DiscordDevelopment
-      file-type: tar.br
-      download-uri: ${{ fromJSON(needs.check.outputs.flatpak-discord-development || '{}').download_uri }}
-      download-type: direct
-      main-extra-data-filename: discord.tar.br
-      # The exact 4 Vencord bundle files (and only those 4) that `VencordInstallerCli
-      # -install` itself downloads, plus OpenAsar's nightly app.asar -- see the
-      # comments in static/flatpak/manifests/com.discord.DiscordDevelopment.yaml.
-      extra-data: >-
-        [
-          {"filename": "vencord-patcher.js", "url": "https://github.com/Vendicated/Vencord/releases/latest/download/patcher.js"},
-          {"filename": "vencord-preload.js", "url": "https://github.com/Vendicated/Vencord/releases/latest/download/preload.js"},
-          {"filename": "vencord-renderer.js", "url": "https://github.com/Vendicated/Vencord/releases/latest/download/renderer.js"},
-          {"filename": "vencord-renderer.css", "url": "https://github.com/Vendicated/Vencord/releases/latest/download/renderer.css"},
-          {"filename": "openasar-app.asar", "url": "https://github.com/GooseMod/OpenAsar/releases/download/nightly/app.asar"}
-        ]
-      # Discord's own per-module download URLs, resolved fresh by the `check` job
-      # (discord.mjs) since they're version-pinned and can't be written as a literal
-      # here the way Vencord's "latest release" links above can.
-      extra-data-dynamic: ${{ toJSON(fromJSON(needs.check.outputs.flatpak-discord-development || '{"modules":[]}').modules) }}
-      check-key: discord-development
-      check-value: ${{ fromJSON(needs.check.outputs.flatpak-discord-development || '{}').fingerprint }}
