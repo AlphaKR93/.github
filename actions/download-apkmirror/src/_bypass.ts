@@ -47,8 +47,12 @@ async function cfBypass(session: Session, url: string, maxRetries: number = 5): 
   throw new Error(`Cloudflare bypass failed after ${maxRetries} attempts: ${url}`);
 }
 
-export async function get(session: Session, url: string, maxRetries: number = 5): Promise<string> {
+export async function get(session: Session, url: string, maxRetries: number = 5, forceFail: boolean = false): Promise<string> {
   try {
+    if (forceFail) {
+      // noinspection ExceptionCaughtLocallyJS
+      throw new Error("Forced failure for skipping FlareSolverr");
+    }
     return (await flareSolverr(session, url, maxRetries)).response!;
   } catch (error) {
     warning(`[!] FlareSolverr failed: ${error}`);

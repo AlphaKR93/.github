@@ -257,7 +257,7 @@ async function main() {
       }
 
       actions.startGroup("Turnstile token generation");
-      let fs = await get(session, versionHref);
+      let fs = await get(session, versionHref, 5, retries > 1);
       actions.debug(fs ?? "{response: null}");
       actions.debug("");
       while (!session.cookies?.includes("cf_clearance")) {
