@@ -258,14 +258,16 @@ async function main() {
 
       actions.startGroup("Turnstile token generation");
       let fs = await get(session, versionHref);
+      actions.debug(fs ?? "{response: null}");
+      actions.debug("");
       while (!session.cookies?.includes("cf_clearance")) {
-        actions.debug(fs ?? "{response: null}");
-        actions.debug("");
         if (turnstileRetries > TURNSTILE_MAX_RETRIES)
           throw new Error("Turnstile token generation failed");
         actions.info(`Retrying to generate... (${(turnstileRetries++).toString().padStart(2, '0')}/${TURNSTILE_MAX_RETRIES})`);
         //await sleep(10_000);
         fs = await get(session, versionHref);
+        actions.debug(fs ?? "{response: null}");
+        actions.debug("");
       }
       actions.endGroup();
       actions.info("[+] Token generated!");
