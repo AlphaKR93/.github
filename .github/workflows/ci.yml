@@ -21,9 +21,7 @@ on:
           - 'photomath'
           - 'flatpak-thorium'
           - 'flatpak-beeper'
-          - 'flatpak-interpreter'
           - 'flatpak-thunderbird-beta'
-          - 'flatpak-discord-development'
           - 'flatpak-claude'
 permissions:
   contents: write
@@ -111,11 +109,6 @@ jobs:
           name: Check new release (Thunderbird)
           run:
             node scripts/flatpak/mozilla.mjs thunderbird beta linux amd64 en-US >> $GITHUB_OUTPUT
-        - id: flatpak-discord-development
-          if: github.event_name != 'workflow_dispatch' || inputs.to-patch == 'all' || inputs.to-patch == 'flatpak-discord-development'
-          name: Check new release (Discord Development)
-          run:
-            node scripts/flatpak/discord.mjs linux amd64 development >> $GITHUB_OUTPUT
         - id: flatpak-beeper
           if: github.event_name != 'workflow_dispatch' || inputs.to-patch == 'all' || inputs.to-patch == 'flatpak-beeper'
           name: Check new release (Beeper Nightly)
@@ -123,13 +116,6 @@ jobs:
             node scripts/flatpak/electron.mjs \
               'https://api.beeper.com/desktop/update-feed/latest-linux.yml?bundleId=com.automattic.beeper.desktop.nightly&platform=linux&arch=x64&channel=nightly' \
               'https://api.beeper.com/desktop/download/linux/x64/nightly/com.automattic.beeper.desktop' >> $GITHUB_OUTPUT
-        - id: flatpak-openinterpreter
-          if: github.event_name != 'workflow_dispatch' || inputs.to-patch == 'all' || inputs.to-patch == 'flatpak-interpreter'
-          name: Check new release (OpenInterpreter Desktop)
-          run:
-            node scripts/flatpak/electron.mjs \
-              'https://auth.openinterpreter.com/storage/v1/object/public/workstationupdater/releases/latest-linux.yml' \
-              'https://openinterpreter.com/download/linux/appimage' >> $GITHUB_OUTPUT
 
   patch-youtube-rvx_anddea-beta:
     needs: check

@@ -20,7 +20,7 @@ async function flareSolverr(session: Session, url: string, maxRetries: number = 
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     const data = await _flareSolverr({ cmd: "request.get", url });
 
-    if (data.status === "ok" && data.solution?.status && 200 <= data.solution.status && data.solution.status < 300) {
+    if (data.status === "ok" && !data.solution?.response?.includes("<title>Just a moment...</title>")) {
       session.cookies = (data.solution?.cookies ?? []).map((cookie) => `${cookie.name}=${cookie.value}`).join("; ");
       session.userAgent = data.solution?.userAgent ?? session.userAgent;
       return data.solution;
