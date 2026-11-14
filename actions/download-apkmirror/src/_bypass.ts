@@ -40,11 +40,12 @@ async function cfBypass(session: Session, url: string, maxRetries: number = 5): 
     const data = await fetch(`http://localhost:8000/html?url=${encodeURI(url)}`);
 
     if (data.ok) {
+      const text = await data.text();
       info(`[+] Cloudflare bypass succeeded: ${data.headers.keys()}`);
-      debug(await data.text());
+      debug(text);
       session.cookies = data.headers.get("x-cf-bypasser-cookies")!;
       session.userAgent = data.headers.get("x-cf-bypasser-user-agent")!;
-      return await data.text();
+      return text;
     }
 
     warning(`[!] Cloudflare bypass attempt ${attempt}/${maxRetries} failed: ${url}`);
@@ -54,12 +55,8 @@ async function cfBypass(session: Session, url: string, maxRetries: number = 5): 
   throw new Error(`Cloudflare bypass failed after ${maxRetries} attempts: ${url}`);
 }
 
-export async function get(session: Session, url: string, maxRetries: number = 5, forceFail: boolean = false): Promise<string> {
+export async function get(session: Session, url: string, maxRetries: number = 5): Promise<string> {
   try {
-    if (forceFail) {
-      // noinspection ExceptionCaughtLocallyJS
-      throw new Error("Forced failure for skipping FlareSolverr");
-    }
     return (await flareSolverr(session, url, maxRetries)).response!;
   } catch (error) {
     warning(`[!] FlareSolverr failed: ${error}`);

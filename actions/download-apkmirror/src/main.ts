@@ -257,7 +257,7 @@ async function main() {
       }
 
       actions.startGroup("Turnstile token generation");
-      let fs = await get(session, versionHref, 5, retries > 1);
+      let fs = await get(session, versionHref);
       actions.debug(fs ?? "{response: null}");
       actions.debug("");
       while (!session.cookies?.includes("cf_clearance")) {
@@ -313,20 +313,20 @@ async function main() {
     }
 
     actions.info(`[+] Downloading ${apkFile} from: ${finalHref}`);
-    await downloadFile(finalHref, `./download/${apkFile}`, {
-      "User-Agent": session.userAgent,
-      Referer: downloadHref,
-      Cookie: session.cookies,
-    });
-    // await getExecOutput("aria2c", [
-    //   `--out=./download/${apkFile}`,
-    //   `--header="User-Agent: ${session.userAgent}"`,
-    //   `--header="Cookie: ${session.cookies}"`,
-    //   `--header="Referer: ${downloadHref}"`,
-    //   `--user-agent="${session.userAgent}"`,
-    //   `--referer="${downloadHref}"`,
-    //   finalHref,
-    // ]);
+    // await downloadFile(finalHref, `./download/${apkFile}`, {
+    //   "User-Agent": session.userAgent,
+    //   Referer: downloadHref,
+    //   Cookie: session.cookies,
+    // });
+    await getExecOutput("aria2c", [
+      `--out=./download/${apkFile}`,
+      `--header=User-Agent: ${session.userAgent}`,
+      `--header=Cookie: ${session.cookies}`,
+      `--header=Referer: ${downloadHref}`,
+      `--user-agent=${session.userAgent}`,
+      `--referer=${downloadHref}`,
+      finalHref,
+    ]);
 
     actions.info(`[+] Successfully downloaded ${apkName}`);
     actions.setOutput("file", `./download/${apkFile}`);
