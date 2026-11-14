@@ -1,9 +1,9 @@
 import * as actions from "@actions/core";
 import { getExecOutput } from "@actions/exec";
-import { load, type CheerioAPI } from "cheerio";
+import { type CheerioAPI, load } from "cheerio";
+import { get } from "./_bypass";
 
 import { ApkMirror } from "./provider";
-import { get } from "./_flaresolverr";
 
 
 const DPI_FALLBACK = ["120-640dpi", "120-480dpi", "480-640dpi", "480dpi"];
@@ -83,7 +83,7 @@ async function main() {
       actions.info(`Retrieving latest version from ApkMirror: ${application.listUrl}`);
       const response = await get(session, application.listUrl);
 
-      const latest = extractAppRowLinks(application, response.response!)
+      const latest = extractAppRowLinks(application, response)
         .filter(({ href }) => href.startsWith(application.versionHrefPrefix))
         .filter(({ text }) => !except?.test(text) && extractor.test(text))
         .map((l) => ({ version: extractor.exec(l.text)?.[0]!, href: l.href }))
@@ -96,7 +96,7 @@ async function main() {
 
     actions.info(`Retrieving version template from ApkMirror: ${application.listUrl}`);
     const response = await get(session, application.listUrl);
-    const links = extractAppRowLinks(application, response.response!);
+    const links = extractAppRowLinks(application, response);
 
     const exact = links.find(filterExact(version));
     if (exact) return [ApkMirror.BASE_URL + exact.href, false];
@@ -115,10 +115,8 @@ async function main() {
     const retrieveVersionPage = async (session: Session, href: string) => {
       actions.info(`- ${href}`);
 
-      const response = await get(session, href);
-      const html = response.response;
-
-      if (html && response.status === 200 && !html.includes("Not Found") && !html.includes("404 Whoops"))
+      const html = await get(session, href);
+      if (html && !html.includes("Not Found") && !html.includes("404 Whoops"))
         return html;
       else
         return null;
@@ -142,8 +140,7 @@ async function main() {
     while (pageNum++ <= 10 && ((!lastPage && pageNum <= 2) || pageNum <= lastPage!)) {
       if (fetched && pageNum === 1) continue; // Skip page 1 since we already searched via getVersionHref
 
-      const response = await get(session, pageNum === 1 ? application.listUrl : `${host}/page/${pageNum}/?${query}`);
-      let content: string | CheerioAPI = response.response!;
+      let content: string | CheerioAPI = await get(session, pageNum === 1 ? application.listUrl : `${host}/page/${pageNum}/?${query}`);
 
       if (!lastPage) {
         if (pageNum > 2) throw new Error("Last page number not set");
@@ -216,7 +213,7 @@ async function main() {
     actions.info(`- ${variantHref}`);
     let response = await get(session, variantHref);
 
-    const allDlBtns = extractHrefs(response.response!, "a.downloadButton");
+    const allDlBtns = extractHrefs(response, "a.downloadButton");
     const dlBtnHref = matchedType === "BUNDLE"
       ? allDlBtns.find((h) => !h.includes("forcebaseapk")) ?? allDlBtns[0]
       : allDlBtns.find((h) => h.includes("forcebaseapk")) ?? allDlBtns[0];
@@ -230,7 +227,7 @@ async function main() {
     actions.info(`- ${downloadHref}`);
     const response = await get(session, downloadHref);
 
-    const finalHref = decodeAmp(extractHrefs(response.response!, "a#download-link")[0] ?? "");
+    const finalHref = decodeAmp(extractHrefs(response, "a#download-link")[0] ?? "");
     if (!finalHref)
       throw new Error("Could not find final download URL");
     return ApkMirror.BASE_URL + finalHref;
@@ -241,20 +238,32 @@ async function main() {
   try {
     const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
+    let retries = 1;
     let turnstileRetries = 0;
+    const DOWNLOAD_MAX_RETRIES = 5;
     const TURNSTILE_MAX_RETRIES = 99;
     async function checkTurnstileToken() {
-      if (session.cookies.includes("cf_clearance")) return;
+      actions.info("[*] Checking Turnstile token...");
+      if (retries <= 1 && session.cookies.includes("cf_clearance")) {
+        actions.info("[*] Turnstile token already generated, skipping...");
+        return;
+      }
 
-      actions.warning("Turnstile token not generated, generating new one...");
+      if (session.cookies.includes("cf_clearance")) {
+        actions.info("[!] Turnstile token invalidated, generating new one...");
+        session.cookies = "";
+      } else {
+        actions.warning("Turnstile token not generated, generating new one...");
+      }
+
       actions.startGroup("Turnstile token generation");
       let fs = await get(session, versionHref);
-      while (!fs.cookies?.some((c) => c.name === "cf_clearance")) {
-        actions.debug(fs.response ?? "null");
+      while (!session.cookies?.includes("cf_clearance")) {
+        actions.debug(fs ?? "{response: null}");
         actions.debug("");
         if (turnstileRetries > TURNSTILE_MAX_RETRIES)
           throw new Error("Turnstile token generation failed");
-        actions.info(`Retrying to generate... (${(turnstileRetries++).toString().padStart(2, '0')}/${TURNSTILE_MAX_RETRIES}): ${fs.cookies?.map((c) => c.name).join(", ") ?? "none"}`);
+        actions.info(`Retrying to generate... (${(turnstileRetries++).toString().padStart(2, '0')}/${TURNSTILE_MAX_RETRIES})`);
         //await sleep(10_000);
         fs = await get(session, versionHref);
       }
@@ -263,8 +272,6 @@ async function main() {
       await sleep(10_000);
     }
 
-    let retries = 1;
-    const DOWNLOAD_MAX_RETRIES = 5;
     async function downloadFile(url: string, destPath: string, headers: Record<string, string>): Promise<void> {
       const { dirname } = await import("node:path");
       const { mkdir } = await import("node:fs/promises");

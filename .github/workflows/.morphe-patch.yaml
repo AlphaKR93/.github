@@ -108,6 +108,19 @@ jobs:
                 sleep 2
               done
 
+          - name: Start CloudflareBypassForScraping
+            shell: bash
+            run: |
+              docker run -d --name cloudflarebypass -p 8000:8000 ghcr.io/sarperavci/cloudflarebypassforscraping:latest
+              echo "[*] Waiting for CloudflareBypassForScraping to start..."
+              for i in $(seq 1 30); do
+                if curl -s http://localhost:8000/ > /dev/null 2>&1; then
+                 echo "[+] CloudflareBypassForScraping is ready."
+                 break
+                fi
+                sleep 2
+              done
+
           - id: patcher
             name: Download patcher
             uses: ./.github/actions/gh-download-asset
